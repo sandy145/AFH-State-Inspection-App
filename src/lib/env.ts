@@ -43,7 +43,19 @@ export const env = {
   isProduction,
   isDevelopmentLike: appEnv === "development" || appEnv === "test",
   appUrl: optional("APP_URL", "http://localhost:3000"),
-  databaseUrl: required("DATABASE_URL"),
+
+  /**
+   * Read lazily rather than at module load.
+   *
+   * A build should not need production credentials: the deployment platform
+   * compiles the app in one environment and runs it in another, and Next.js
+   * imports every route module while building. Demanding the database URL up
+   * front would fail the build for want of a secret the build has no business
+   * holding. A request that actually needs the database still fails loudly.
+   */
+  get databaseUrl(): string {
+    return required("DATABASE_URL");
+  },
 
   sessionSecret: sessionSecret || "development-only-session-secret",
   sessionTtlMinutes: int("SESSION_TTL_MINUTES", 60),
