@@ -265,6 +265,12 @@ with scoped headers, and status conveyed by icon and text as well as colour, so
 nothing depends on colour alone. It has **not** been through a formal accessibility
 audit — see ARCHITECTURE.md.
 
+## Deploying
+
+[DEPLOYMENT.md](DEPLOYMENT.md) covers a Vercel + Supabase deployment: the pooled
+connection strings serverless needs, why migrations and runtime use different
+ports, and which settings must change before anyone else sees the URL.
+
 ## Licence
 
 Not yet determined. This is a prototype produced for evaluation.
