@@ -1,0 +1,1047 @@
+// AFH Compliance Portal — data model
+// Washington State DSHS / Residential Care Services (prototype)
+//
+// Design rules for this schema:
+//  * UUID primary keys everywhere.
+//  * Regulatory records are never destructively deleted. Where a record must
+//    disappear from view, it is deactivated or superseded, never removed.
+//  * Evidence is append-only. Re-uploading produces a new DocumentVersion that
+//    points at its predecessor; the predecessor is retained.
+//  * Deadline lengths, holidays and policy toggles live in configuration tables
+//    so RCS can change them without a code deployment.
+//  * This database is NOT the licensing system of record. Facility, license and
+//    identity rows carry externalId columns and synchronize inbound.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity, tenancy and org structure
+// ---------------------------------------------------------------------------
+
+enum Role {
+  PROVIDER
+  INSPECTOR
+  FIELD_MANAGER
+  RCS_ADMIN
+  IDR_MANAGER // modeled for a future IDR program team; not an MVP dependency
+}
+
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String    @unique
+  fullName       String
+  role           Role
+  title          String?
+  phone          String?
+  /// Subject claim from the external IdP once Entra ID replaces local auth.
+  externalId     String?   @unique
+  /// scrypt hash; null for accounts that authenticate only through an IdP.
+  passwordHash   String?
+  mfaEnrolled    Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  deactivatedAt  DateTime?
+  lastLoginAt    DateTime?
+  regionId       String?   @db.Uuid
+  organizationId String?   @db.Uuid
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  region              Region?                @relation(fields: [regionId], references: [id])
+  organization        Organization?          @relation(fields: [organizationId], references: [id])
+  sessions            Session[]
+  facilityLinks       FacilityUser[]
+  assignments         InspectionAssignment[]
+  inspectionsLed      Inspection[]           @relation("InspectionLeadInspector")
+  inspectionsManaged  Inspection[]           @relation("InspectionFieldManager")
+  notifications       Notification[]
+  auditEvents         AuditEvent[]
+  messagesSent        FindingMessage[]
+  evidenceReviews     EvidenceReview[]
+  uploadedVersions    DocumentVersion[]
+  submissionsMade     EvidenceSubmission[]
+  consultationsIssued Consultation[]
+  citationsIssued     Citation[]             @relation("CitationIssuedBy")
+  citationsReviewed   Citation[]             @relation("CitationOverrideApprover")
+  correctionsReviewed Correction[]           @relation("CorrectionReviewer")
+  followUpsAssigned   FollowUp[]
+  timelineEvents      TimelineEvent[]
+
+  @@index([role])
+  @@index([regionId])
+}
+
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  /// SHA-256 of the cookie value. The raw token is never stored.
+  tokenHash  String    @unique
+  userId     String    @db.Uuid
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  ipAddress  String?
+  userAgent  String?
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// A provider entity. One organization may operate several licensed homes.
+model Organization {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  externalId String?  @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  facilities Facility[]
+  users      User[]
+}
+
+model Region {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  facilities  Facility[]
+  users       User[]
+  inspections Inspection[]
+}
+
+/// A licensed Adult Family Home. Authoritative data originates in the DSHS
+/// facility directory; `externalId` and `syncedAt` track that relationship.
+model Facility {
+  id             String    @id @default(uuid()) @db.Uuid
+  name           String
+  licenseNumber  String    @unique
+  externalId     String?   @unique
+  syncedAt       DateTime?
+  addressLine1   String
+  addressLine2   String?
+  city           String
+  state          String    @default("WA")
+  zip            String
+  county         String?
+  phone          String?
+  bedCapacity    Int       @default(6)
+  licenseeName   String?
+  licensedAt     DateTime?
+  isActive       Boolean   @default(true)
+  regionId       String?   @db.Uuid
+  organizationId String?   @db.Uuid
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  region       Region?        @relation(fields: [regionId], references: [id])
+  organization Organization?  @relation(fields: [organizationId], references: [id])
+  userLinks    FacilityUser[]
+  inspections  Inspection[]
+
+  @@index([regionId])
+  @@index([organizationId])
+}
+
+/// The tenant-isolation join. A provider sees exactly the facilities listed here.
+model FacilityUser {
+  id           String   @id @default(uuid()) @db.Uuid
+  facilityId   String   @db.Uuid
+  userId       String   @db.Uuid
+  /// e.g. "Provider", "Resident Manager", "Administrator"
+  relationship String   @default("Provider")
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([facilityId, userId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Regulatory reference data
+// ---------------------------------------------------------------------------
+
+enum RegulationSource {
+  WAC
+  RCW
+  POLICY
+}
+
+model Regulation {
+  id                String           @id @default(uuid()) @db.Uuid
+  /// e.g. "388-76-10506"
+  citation          String           @unique
+  source            RegulationSource @default(WAC)
+  title             String
+  summary           String?
+  /// Guidance shown to the inspector. Never used to decide anything.
+  inspectorGuidance String?
+  url               String?
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  findings         Finding[]
+  evidenceRequests EvidenceRequest[]
+  citations        Citation[]
+  consultations    Consultation[]
+
+  @@index([source])
+}
+
+// ---------------------------------------------------------------------------
+// Inspection case
+// ---------------------------------------------------------------------------
+
+enum InspectionType {
+  INITIAL_LICENSING
+  FULL_LICENSING
+  COMPLAINT_INVESTIGATION
+  FOLLOW_UP
+  MONITORING
+}
+
+enum InspectionStatus {
+  DRAFT
+  IN_PROGRESS
+  EVIDENCE_REVIEW
+  PENDING_REPORT
+  REPORT_ISSUED
+  CORRECTION_PERIOD
+  FOLLOW_UP
+  CLOSED
+  CANCELLED
+}
+
+/// How a legally required document actually reached the provider. The portal
+/// records this rather than assuming portal delivery satisfies service.
+enum ServiceMethod {
+  US_MAIL
+  CERTIFIED_MAIL
+  HAND_DELIVERY
+  EMAIL
+  FAX
+  PORTAL_ONLY
+}
+
+model Inspection {
+  id                   String           @id @default(uuid()) @db.Uuid
+  /// Human-facing case number, e.g. AFH-2026-001284
+  caseNumber           String           @unique
+  facilityId           String           @db.Uuid
+  regionId             String?          @db.Uuid
+  type                 InspectionType
+  status               InspectionStatus @default(DRAFT)
+  leadInspectorId      String?          @db.Uuid
+  fieldManagerId       String?          @db.Uuid
+  startedAt            DateTime
+  lastDataCollectionAt DateTime?
+  exitConferenceAt     DateTime?
+  /// Statement of Deficiencies / inspection report service tracking.
+  reportIssuedAt       DateTime?
+  reportReceivedAt     DateTime?
+  reportServiceMethod  ServiceMethod?
+  portalNotifiedAt     DateTime?
+  responsiblePerson    String?
+  closedAt             DateTime?
+  summary              String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  facility      Facility               @relation(fields: [facilityId], references: [id])
+  region        Region?                @relation(fields: [regionId], references: [id])
+  leadInspector User?                  @relation("InspectionLeadInspector", fields: [leadInspectorId], references: [id])
+  fieldManager  User?                  @relation("InspectionFieldManager", fields: [fieldManagerId], references: [id])
+  assignments   InspectionAssignment[]
+  findings      Finding[]
+  documents     Document[]
+  timeline      TimelineEvent[]
+  deadlines     Deadline[]
+  followUps     FollowUp[]
+  notifications Notification[]
+
+  @@index([facilityId])
+  @@index([status])
+  @@index([leadInspectorId])
+  @@index([regionId])
+}
+
+model InspectionAssignment {
+  id             String    @id @default(uuid()) @db.Uuid
+  inspectionId   String    @db.Uuid
+  userId         String    @db.Uuid
+  /// "LEAD" | "SUPPORT" | "OBSERVER" | "FIELD_MANAGER"
+  assignmentRole String    @default("SUPPORT")
+  assignedAt     DateTime  @default(now())
+  unassignedAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@unique([inspectionId, userId, assignmentRole])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Findings
+// ---------------------------------------------------------------------------
+
+enum FindingStatus {
+  DRAFT
+  POTENTIAL_FINDING
+  EVIDENCE_REQUESTED
+  PROVIDER_RESPONDED
+  UNDER_INSPECTOR_REVIEW
+  ADDITIONAL_INFO_REQUESTED
+  RESOLVED_NO_VIOLATION
+  RESOLVED_CONSULTATION
+  CITATION_ISSUED
+  CORRECTION_PENDING
+  CORRECTION_UNDER_REVIEW
+  CORRECTED_BACK_IN_COMPLIANCE
+  IDR_PENDING
+  MODIFIED_FOLLOWING_IDR
+  CITATION_RESCINDED
+  CLOSED
+}
+
+/// The inspector's working view of where a finding may land. Never computed by
+/// software — an inspector sets it, and it carries no legal weight until a
+/// citation or consultation record exists.
+enum PotentialOutcome {
+  UNDETERMINED
+  LIKELY_NO_VIOLATION
+  POSSIBLE_CONSULTATION
+  POSSIBLE_CITATION
+}
+
+model Finding {
+  id                 String           @id @default(uuid()) @db.Uuid
+  /// Case-scoped label, e.g. F-004
+  reference          String
+  inspectionId       String           @db.Uuid
+  regulationId       String?          @db.Uuid
+  title              String
+  observation        String
+  /// Resident reference is a redacted identifier ("Resident A"), never a name.
+  residentIdentifier String?
+  status             FindingStatus    @default(DRAFT)
+  potentialOutcome   PotentialOutcome @default(UNDETERMINED)
+  evidenceDueAt      DateTime?
+  resolvedAt         DateTime?
+  resolutionNote     String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  inspection       Inspection           @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  regulation       Regulation?          @relation(fields: [regulationId], references: [id])
+  evidenceRequests EvidenceRequest[]
+  submissions      EvidenceSubmission[]
+  messages         FindingMessage[]
+  consultation     Consultation?
+  citation         Citation?
+  deadlines        Deadline[]
+  timeline         TimelineEvent[]
+
+  @@unique([inspectionId, reference])
+  @@index([status])
+  @@index([regulationId])
+}
+
+// ---------------------------------------------------------------------------
+// Evidence
+// ---------------------------------------------------------------------------
+
+enum EvidenceRequestStatus {
+  OPEN
+  PARTIALLY_RESPONDED
+  RESPONDED
+  UNDER_REVIEW
+  ADDITIONAL_INFO_REQUESTED
+  SATISFIED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model EvidenceRequest {
+  id                  String                @id @default(uuid()) @db.Uuid
+  /// Case-scoped label, e.g. ER-002
+  reference           String
+  findingId           String                @db.Uuid
+  regulationId        String?               @db.Uuid
+  title               String
+  instructions        String
+  /// Free-text list of the documents or information requested.
+  itemsRequested      String
+  dueAt               DateTime?
+  priority            Priority              @default(NORMAL)
+  allowMultipleFiles  Boolean               @default(true)
+  explanationRequired Boolean               @default(false)
+  status              EvidenceRequestStatus @default(OPEN)
+  requestedById       String?               @db.Uuid
+  requestedAt         DateTime              @default(now())
+  cancelledAt         DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  finding     Finding              @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  regulation  Regulation?          @relation(fields: [regulationId], references: [id])
+  submissions EvidenceSubmission[]
+  deadlines   Deadline[]
+
+  @@unique([findingId, reference])
+  @@index([status])
+  @@index([dueAt])
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  REVIEWED
+  SUPERSEDED
+  WITHDRAWN
+}
+
+/// One provider response to one evidence request. Carries one or more files.
+/// A submission is never edited after the fact — a correction means a new
+/// submission that supersedes this one.
+model EvidenceSubmission {
+  id                  String           @id @default(uuid()) @db.Uuid
+  /// Receipt-facing identifier, e.g. EV-7A82F93
+  reference           String           @unique
+  evidenceRequestId   String           @db.Uuid
+  findingId           String           @db.Uuid
+  submittedById       String           @db.Uuid
+  submittedAt         DateTime         @default(now())
+  providerExplanation String?
+  status              SubmissionStatus @default(SUBMITTED)
+  supersededById      String?          @unique @db.Uuid
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  evidenceRequest EvidenceRequest     @relation(fields: [evidenceRequestId], references: [id], onDelete: Cascade)
+  finding         Finding             @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  submittedBy     User                @relation(fields: [submittedById], references: [id])
+  supersededBy    EvidenceSubmission? @relation("SubmissionSupersedes", fields: [supersededById], references: [id])
+  supersedes      EvidenceSubmission? @relation("SubmissionSupersedes")
+  files           EvidenceFile[]
+  reviews         EvidenceReview[]
+  receipt         Receipt?
+
+  @@index([findingId])
+  @@index([evidenceRequestId])
+  @@index([status])
+}
+
+/// Join between a submission and the stored document version that carries the
+/// bytes. Keeping file metadata separate from the storage object means the
+/// object key never has to be exposed and can move between providers.
+model EvidenceFile {
+  id                String   @id @default(uuid()) @db.Uuid
+  submissionId      String   @db.Uuid
+  documentVersionId String   @db.Uuid
+  documentType      String?
+  description       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  submission      EvidenceSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  documentVersion DocumentVersion    @relation(fields: [documentVersionId], references: [id])
+
+  @@unique([submissionId, documentVersionId])
+}
+
+/// The inspector's determination on one submission. Anything other than
+/// ACCEPTED requires a documented reason (enforced in domain/evidence.ts).
+enum ReviewOutcome {
+  ACCEPTED
+  PARTIALLY_ACCEPTED
+  INSUFFICIENT
+  WRONG_DOCUMENT
+  ADDITIONAL_INFO_REQUIRED
+  SUPERSEDED
+  NOT_APPLICABLE
+}
+
+model EvidenceReview {
+  id           String        @id @default(uuid()) @db.Uuid
+  submissionId String        @db.Uuid
+  reviewerId   String        @db.Uuid
+  outcome      ReviewOutcome
+  reason       String?
+  reviewedAt   DateTime      @default(now())
+  /// True for the determination currently in force on this submission.
+  isCurrent    Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  submission EvidenceSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewer   User               @relation(fields: [reviewerId], references: [id])
+
+  @@index([submissionId])
+  @@index([reviewerId])
+}
+
+/// Proof of submission handed to the provider the moment a submission lands.
+model Receipt {
+  id                   String   @id @default(uuid()) @db.Uuid
+  submissionId         String   @unique @db.Uuid
+  /// Denormalized on purpose: a receipt must still read correctly years later
+  /// even if surrounding records are renamed.
+  receiptNumber        String   @unique
+  caseNumber           String
+  facilityName         String
+  findingReference     String
+  evidenceRequestTitle String
+  fileNames            String
+  submittedByName      String
+  receivedAt           DateTime
+  createdAt            DateTime @default(now())
+
+  submission EvidenceSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Documents and versioning
+// ---------------------------------------------------------------------------
+
+enum ScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  SCAN_FAILED
+}
+
+/// A logical document. Its bytes live in DocumentVersion rows; a document is
+/// never overwritten, only versioned.
+model Document {
+  id           String   @id @default(uuid()) @db.Uuid
+  inspectionId String?  @db.Uuid
+  facilityId   String?  @db.Uuid
+  title        String
+  documentType String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  inspection Inspection?       @relation(fields: [inspectionId], references: [id])
+  versions   DocumentVersion[]
+
+  @@index([inspectionId])
+  @@index([facilityId])
+}
+
+model DocumentVersion {
+  id                String     @id @default(uuid()) @db.Uuid
+  documentId        String     @db.Uuid
+  version           Int
+  fileName          String
+  mimeType          String
+  sizeBytes         Int
+  /// SHA-256 of the stored bytes.
+  checksum          String
+  /// Opaque key inside DocumentStorageService. Never rendered to a browser.
+  storageKey        String
+  uploadedById      String     @db.Uuid
+  uploadedAt        DateTime   @default(now())
+  isCurrent         Boolean    @default(true)
+  previousVersionId String?    @unique @db.Uuid
+  scanStatus        ScanStatus @default(PENDING)
+  scannedAt         DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  document        Document             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy      User                 @relation(fields: [uploadedById], references: [id])
+  previousVersion DocumentVersion?     @relation("VersionChain", fields: [previousVersionId], references: [id])
+  nextVersion     DocumentVersion?     @relation("VersionChain")
+  evidenceFiles   EvidenceFile[]
+  correctionFiles CorrectionEvidence[]
+
+  @@unique([documentId, version])
+  @@index([checksum])
+}
+
+// ---------------------------------------------------------------------------
+// Finding conversation
+// ---------------------------------------------------------------------------
+
+/// Messages are bound to a finding on purpose. This is a case record, not a
+/// general chat product, and nothing here may exist outside a finding.
+model FindingMessage {
+  id         String    @id @default(uuid()) @db.Uuid
+  findingId  String    @db.Uuid
+  authorId   String    @db.Uuid
+  body       String
+  /// Providers never see internal notes.
+  isInternal Boolean   @default(false)
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id])
+
+  @@index([findingId])
+}
+
+// ---------------------------------------------------------------------------
+// Outcomes: consultation, citation, correction, IDR, follow-up
+// ---------------------------------------------------------------------------
+
+/// A consultation is an inspector's decision under RCS policy. The software
+/// displays guidance but never determines eligibility.
+model Consultation {
+  id                       String    @id @default(uuid()) @db.Uuid
+  findingId                String    @unique @db.Uuid
+  regulationId             String?   @db.Uuid
+  issuedById               String    @db.Uuid
+  issueDescription         String
+  /// Why the inspector selected consultation. Required.
+  rationale                String
+  evidenceRelied           String?
+  issuedAt                 DateTime  @default(now())
+  providerAcknowledgedAt   DateTime?
+  providerAcknowledgedById String?   @db.Uuid
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  finding    Finding     @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  regulation Regulation? @relation(fields: [regulationId], references: [id])
+  issuedBy   User        @relation(fields: [issuedById], references: [id])
+}
+
+enum CitationStatus {
+  DRAFT
+  FINALIZED
+  CORRECTION_PENDING
+  CORRECTION_UNDER_REVIEW
+  CORRECTED
+  RESCINDED
+  MODIFIED
+}
+
+enum RiskLevel {
+  NOT_CLASSIFIED
+  LOW
+  MODERATE
+  HIGH
+  IMMEDIATE_JEOPARDY
+}
+
+model Citation {
+  id                       String         @id @default(uuid()) @db.Uuid
+  /// e.g. CIT-2026-000418
+  citationNumber           String         @unique
+  findingId                String         @unique @db.Uuid
+  regulationId             String?        @db.Uuid
+  deficientPractice        String
+  inspectorAnalysis        String
+  evidenceRelied           String?
+  riskLevel                RiskLevel      @default(NOT_CLASSIFIED)
+  status                   CitationStatus @default(DRAFT)
+  issuedById               String?        @db.Uuid
+  citedAt                  DateTime?
+  /// Service tracking — the portal does not assume it satisfies service.
+  serviceMethod            ServiceMethod?
+  servedAt                 DateTime?
+  receivedAt               DateTime?
+  correctionDueAt          DateTime?
+  attestationRequired      Boolean        @default(true)
+  planOfCorrectionRequired Boolean        @default(false)
+  rescindedAt              DateTime?
+  rescissionReason         String?
+
+  // --- Unreviewed-evidence override (§9). Present only when policy allowed a
+  // finalization to proceed over unreviewed provider evidence. Every field here
+  // is also written to the immutable audit log.
+  overrideUsed            Boolean   @default(false)
+  overrideJustification   String?
+  overrideById            String?   @db.Uuid
+  overrideAt              DateTime?
+  overrideApprovedById    String?   @db.Uuid
+  overrideApprovedAt      DateTime?
+  overridePendingApproval Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  finding            Finding      @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  regulation         Regulation?  @relation(fields: [regulationId], references: [id])
+  issuedBy           User?        @relation("CitationIssuedBy", fields: [issuedById], references: [id])
+  overrideApprovedBy User?        @relation("CitationOverrideApprover", fields: [overrideApprovedById], references: [id])
+  corrections        Correction[]
+  idrRequests        IDRRequest[]
+  followUps          FollowUp[]
+  deadlines          Deadline[]
+
+  @@index([status])
+}
+
+enum CorrectionStatus {
+  NOT_SUBMITTED
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  ADDITIONAL_INFO_REQUESTED
+  ACCEPTED
+  CORRECTION_VERIFICATION_REQUIRED
+  CORRECTED
+}
+
+enum CorrectionKind {
+  ATTESTATION_OF_CORRECTION
+  PLAN_OF_CORRECTION
+}
+
+model Correction {
+  id                    String           @id @default(uuid()) @db.Uuid
+  citationId            String           @db.Uuid
+  kind                  CorrectionKind   @default(ATTESTATION_OF_CORRECTION)
+  status                CorrectionStatus @default(DRAFT)
+  howCorrected          String?
+  correctionCompletedAt DateTime?
+  howMaintained         String?
+  responsiblePerson     String?
+  /// Electronic attestation captured at submit time.
+  signatureName         String?
+  signatureTitle        String?
+  signedAt              DateTime?
+  submittedAt           DateTime?
+  submittedById         String?          @db.Uuid
+  reviewedById          String?          @db.Uuid
+  reviewedAt            DateTime?
+  reviewNote            String?
+  dueAt                 DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  citation   Citation             @relation(fields: [citationId], references: [id], onDelete: Cascade)
+  reviewedBy User?                @relation("CorrectionReviewer", fields: [reviewedById], references: [id])
+  evidence   CorrectionEvidence[]
+
+  @@index([citationId])
+  @@index([status])
+}
+
+model CorrectionEvidence {
+  id                String   @id @default(uuid()) @db.Uuid
+  correctionId      String   @db.Uuid
+  documentVersionId String   @db.Uuid
+  description       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  correction      Correction      @relation(fields: [correctionId], references: [id], onDelete: Cascade)
+  documentVersion DocumentVersion @relation(fields: [documentVersionId], references: [id])
+
+  @@unique([correctionId, documentVersionId])
+}
+
+enum IDRMethod {
+  TRADITIONAL
+  PANEL
+  DESK_REVIEW
+  TELEPHONE
+  FACE_TO_FACE
+}
+
+enum IDRStatus {
+  REQUESTED
+  ACCEPTED_FOR_REVIEW
+  SCHEDULED
+  UNDER_REVIEW
+  COMPLETED_UPHELD
+  COMPLETED_MODIFIED
+  COMPLETED_RESCINDED
+  WITHDRAWN
+  DENIED_UNTIMELY
+}
+
+/// IDR runs on its own axis. A citation can be CORRECTION_PENDING and have an
+/// IDRRequest in REQUESTED at the same time; the two never share a status field.
+model IDRRequest {
+  id                 String    @id @default(uuid()) @db.Uuid
+  /// e.g. IDR-2026-000031
+  reference          String    @unique
+  citationId         String    @db.Uuid
+  requestedById      String?   @db.Uuid
+  reason             String
+  requestedMethod    IDRMethod @default(DESK_REVIEW)
+  status             IDRStatus @default(REQUESTED)
+  submittedAt        DateTime  @default(now())
+  dueAt              DateTime?
+  scheduledAt        DateTime?
+  decidedAt          DateTime?
+  decisionSummary    String?
+  supportingEvidence String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  citation  Citation   @relation(fields: [citationId], references: [id], onDelete: Cascade)
+  deadlines Deadline[]
+
+  @@index([citationId])
+  @@index([status])
+}
+
+enum FollowUpMethod {
+  DOCUMENT_REVIEW
+  TELEPHONE_VERIFICATION
+  ON_SITE
+}
+
+enum FollowUpResult {
+  PENDING
+  BACK_IN_COMPLIANCE
+  NOT_BACK_IN_COMPLIANCE
+  ADDITIONAL_DEFICIENCIES
+}
+
+model FollowUp {
+  id                     String         @id @default(uuid()) @db.Uuid
+  inspectionId           String         @db.Uuid
+  citationId             String?        @db.Uuid
+  method                 FollowUpMethod
+  scheduledFor           DateTime?
+  assignedToId           String?        @db.Uuid
+  completedAt            DateTime?
+  result                 FollowUpResult @default(PENDING)
+  backInCompliance       Boolean?
+  evidenceReviewed       String?
+  additionalDeficiencies String?
+  notes                  String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  citation   Citation?  @relation(fields: [citationId], references: [id])
+  assignedTo User?      @relation(fields: [assignedToId], references: [id])
+
+  @@index([inspectionId])
+  @@index([assignedToId])
+}
+
+// ---------------------------------------------------------------------------
+// Deadlines (configurable — see domain/deadlines.ts)
+// ---------------------------------------------------------------------------
+
+enum DeadlineUnit {
+  CALENDAR_DAYS
+  WORKING_DAYS
+}
+
+enum DeadlineTrigger {
+  INSPECTION_REPORT_RECEIVED
+  CITATION_SERVED
+  CITATION_RECEIVED
+  EVIDENCE_REQUESTED
+  CORRECTION_SUBMITTED
+  IDR_REQUESTED
+  FOLLOW_UP_SCHEDULED
+}
+
+/// Configuration, not code. RCS changes offsets here; every change is audited.
+model DeadlineRule {
+  id          String          @id @default(uuid()) @db.Uuid
+  key         String          @unique
+  label       String
+  description String?
+  trigger     DeadlineTrigger
+  offset      Int
+  unit        DeadlineUnit    @default(CALENDAR_DAYS)
+  /// Citation shown next to the deadline so staff can check the source.
+  authority   String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  deadlines Deadline[]
+}
+
+model Holiday {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, name])
+}
+
+enum DeadlineStatus {
+  OPEN
+  MET
+  MISSED
+  WAIVED
+  CANCELLED
+}
+
+/// A materialized deadline on a specific record. `dueAt` is only ever changed
+/// through the admin path, which writes an audit event carrying old and new.
+model Deadline {
+  id                String          @id @default(uuid()) @db.Uuid
+  ruleId            String?         @db.Uuid
+  ruleKey           String
+  label             String
+  dueAt             DateTime
+  status            DeadlineStatus  @default(OPEN)
+  satisfiedAt       DateTime?
+  computedFrom      DateTime
+  computedFromEvent DeadlineTrigger
+  note              String?
+
+  inspectionId      String? @db.Uuid
+  findingId         String? @db.Uuid
+  evidenceRequestId String? @db.Uuid
+  citationId        String? @db.Uuid
+  idrRequestId      String? @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rule            DeadlineRule?    @relation(fields: [ruleId], references: [id])
+  inspection      Inspection?      @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  finding         Finding?         @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  evidenceRequest EvidenceRequest? @relation(fields: [evidenceRequestId], references: [id], onDelete: Cascade)
+  citation        Citation?        @relation(fields: [citationId], references: [id], onDelete: Cascade)
+  idrRequest      IDRRequest?      @relation(fields: [idrRequestId], references: [id], onDelete: Cascade)
+
+  @@index([dueAt])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications, timeline, audit
+// ---------------------------------------------------------------------------
+
+enum NotificationEvent {
+  EVIDENCE_REQUESTED
+  EVIDENCE_DUE_SOON
+  EVIDENCE_OVERDUE
+  EVIDENCE_UPLOADED
+  EVIDENCE_REVIEWED
+  ADDITIONAL_INFO_REQUESTED
+  CITATION_ISSUED
+  CORRECTION_DUE_SOON
+  CORRECTION_OVERDUE
+  CORRECTION_ACCEPTED
+  FOLLOW_UP_SCHEDULED
+  IDR_DEADLINE_APPROACHING
+  IDR_STATUS_CHANGED
+  CASE_CLOSED
+  NEW_MESSAGE
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+/// Email carries a link, never a document. Sensitive content stays in the portal.
+model Notification {
+  id           String              @id @default(uuid()) @db.Uuid
+  userId       String              @db.Uuid
+  event        NotificationEvent
+  channel      NotificationChannel @default(IN_APP)
+  subject      String
+  body         String
+  /// Relative path within the portal, e.g. /inspections/<id>/findings/<id>
+  linkPath     String?
+  inspectionId String?             @db.Uuid
+  readAt       DateTime?
+  sentAt       DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inspection Inspection? @relation(fields: [inspectionId], references: [id])
+
+  @@index([userId, readAt])
+  @@index([event])
+}
+
+/// Human-readable case history, generated from system events (§20).
+model TimelineEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  inspectionId String   @db.Uuid
+  findingId    String?  @db.Uuid
+  actorId      String?  @db.Uuid
+  /// Short machine key, e.g. EVIDENCE_UPLOADED
+  eventType    String
+  /// Sentence rendered in the timeline.
+  description  String
+  occurredAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  finding    Finding?   @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  actor      User?      @relation(fields: [actorId], references: [id])
+
+  @@index([inspectionId, occurredAt])
+}
+
+/// Immutable. There is no update or delete path to this table anywhere in the
+/// application, and none should ever be added.
+model AuditEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  actorId       String?  @db.Uuid
+  actorEmail    String?
+  actorRole     Role?
+  action        String
+  entityType    String
+  entityId      String?
+  /// Case number where one applies, so audit rows stay readable standalone.
+  caseNumber    String?
+  previousValue String?
+  newValue      String?
+  reason        String?
+  ipAddress     String?
+  userAgent     String?
+  occurredAt    DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([occurredAt])
+  @@index([actorId])
+  @@index([action])
+}
+
+// ---------------------------------------------------------------------------
+// System configuration
+// ---------------------------------------------------------------------------
+
+/// Typed key/value configuration so policy toggles are data, not deployments.
+model SystemConfiguration {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  value       String
+  valueType   String   @default("string")
+  label       String
+  description String?
+  category    String   @default("general")
+  updatedById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

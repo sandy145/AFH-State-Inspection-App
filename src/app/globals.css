@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 215 25% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+    --primary: 213 74% 32%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 32% 95%;
+    --secondary-foreground: 215 25% 20%;
+    --muted: 214 32% 96%;
+    --muted-foreground: 215 16% 42%;
+    --accent: 214 32% 93%;
+    --accent-foreground: 215 25% 20%;
+    --destructive: 0 72% 38%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 32 90% 34%;
+    --warning-foreground: 0 0% 100%;
+    --success: 152 62% 26%;
+    --success-foreground: 0 0% 100%;
+    --border: 214 20% 86%;
+    --input: 214 20% 86%;
+    --ring: 213 74% 32%;
+    --radius: 0.375rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-muted/40 text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* A visible focus ring on every interactive element is a hard accessibility
+     requirement here; never remove it without an equivalent replacement. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer components {
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50
+           focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { @apply bg-white; }
+}
