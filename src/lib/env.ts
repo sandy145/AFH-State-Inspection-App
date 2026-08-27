@@ -48,7 +48,24 @@ export const env = {
   sessionSecret: sessionSecret || "development-only-session-secret",
   sessionTtlMinutes: int("SESSION_TTL_MINUTES", 60),
 
-  storageDriver: optional("STORAGE_DRIVER", "local") as "local" | "s3",
+  /**
+   * Whether the session cookie carries the Secure flag.
+   *
+   * Derived from the scheme the app is actually served over, not from APP_ENV.
+   * A hosted demo runs over HTTPS while deliberately not calling itself
+   * "production", and tying Secure to APP_ENV would have shipped that demo with
+   * a cookie that travels in the clear.
+   */
+  cookieSecure: bool("COOKIE_SECURE", optional("APP_URL", "").startsWith("https:")),
+
+  /**
+   * Whether the login page lists the demo accounts. Anyone can sign in with
+   * them, so this is off unless explicitly enabled, and never on in production.
+   */
+  showDemoCredentials:
+    bool("SHOW_DEMO_CREDENTIALS", appEnv === "development" || appEnv === "test") && !isProduction,
+
+  storageDriver: optional("STORAGE_DRIVER", "local") as "local" | "s3" | "database",
   storageLocalPath: optional("STORAGE_LOCAL_PATH", ".storage"),
   s3: {
     endpoint: optional("S3_ENDPOINT", "http://localhost:9000"),

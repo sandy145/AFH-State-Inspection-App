@@ -116,9 +116,10 @@ export async function AppShell({ user, children }: { user: SessionUser; children
 
       <footer className="mx-auto max-w-[1400px] px-4 pb-10 text-xs text-muted-foreground">
         <p>
-          Prototype for demonstration. Not an authoritative licensing record, and not a substitute for
-          any legally required method of service. Regulatory decisions are made by authorized DSHS
-          staff, never by this software.
+          Unofficial prototype, not affiliated with or operated by Washington State DSHS. All data
+          shown is fictional. Not an authoritative licensing record, and not a substitute for any
+          legally required method of service. Regulatory decisions are made by authorized staff,
+          never by this software.
         </p>
       </footer>
     </div>

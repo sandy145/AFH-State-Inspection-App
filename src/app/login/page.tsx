@@ -27,7 +27,7 @@ export default async function LoginPage() {
         <div className="flex flex-col justify-center">
           <div className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-primary">
             <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-            Washington State Department of Social and Health Services
+            Prototype modelled on Washington State DSHS / RCS process
           </div>
           <h1 className="text-3xl font-semibold tracking-tight">AFH Compliance Portal</h1>
           <p className="mt-3 max-w-md text-muted-foreground">
@@ -35,12 +35,17 @@ export default async function LoginPage() {
             finding, every request for evidence, every document submitted, and every decision made.
           </p>
 
-          <div className="mt-8 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-            <p className="font-semibold">Prototype</p>
+          <div className="mt-8 rounded-lg border-2 border-amber-400 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">Unofficial prototype — not a Washington State system</p>
             <p className="mt-1">
-              This is a demonstration system. It is not an authoritative licensing record, and it has
-              not completed Washington State security or accessibility review. Do not enter real
-              resident information.
+              This is an independent demonstration built to explore how the inspection and evidence
+              process could work. It is <strong>not affiliated with, operated by, or endorsed by</strong>{" "}
+              DSHS or Residential Care Services, it is not an authoritative licensing record, and it
+              has not completed any state security or accessibility review.
+            </p>
+            <p className="mt-2">
+              Every home, person and case in it is fictional. Do not enter real resident information,
+              real licence numbers, or anything you would not want to be public.
             </p>
           </div>
         </div>
@@ -54,11 +59,11 @@ export default async function LoginPage() {
               <LoginForm />
             </Suspense>
 
-            {env.isDevelopmentLike ? (
+            {env.showDemoCredentials ? (
               <div className="rounded-md border bg-muted/40 p-4 text-sm">
-                <p className="font-medium">Development demo accounts</p>
+                <p className="font-medium">Demo accounts</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Seeded only when APP_ENV is development or test. Password for all accounts:{" "}
+                  Fictional accounts holding fictional data. Password for all accounts:{" "}
                   <code className="rounded bg-background px-1 py-0.5">{env.demoPassword}</code>
                 </p>
                 <ul className="mt-3 space-y-1">

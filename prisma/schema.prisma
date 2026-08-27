@@ -17,8 +17,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Serverless runtimes open many short-lived connections, so the app connects
+  // through a pooler. Migrations need a direct session connection instead;
+  // Prisma uses directUrl for those and falls back to url when it is unset.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // ---------------------------------------------------------------------------
@@ -1026,6 +1030,26 @@ model AuditEvent {
   @@index([occurredAt])
   @@index([actorId])
   @@index([action])
+}
+
+/// Bytes for the "database" storage driver.
+///
+/// Object storage is the right home for evidence, and DocumentStorageService has
+/// S3 and filesystem drivers for exactly that. This table backs a third driver
+/// used where neither is available -- a serverless demo with no object store
+/// attached. It is deliberately separate from DocumentVersion so file metadata
+/// and file bytes stay apart, and so moving a deployment onto Blob or S3 is a
+/// driver swap and a copy, not a schema change.
+///
+/// Not intended for production: see ARCHITECTURE.md.
+model StoredObject {
+  id         String   @id @default(uuid()) @db.Uuid
+  storageKey String   @unique
+  mimeType   String
+  sizeBytes  Int
+  checksum   String
+  body       Bytes
+  createdAt  DateTime @default(now())
 }
 
 // ---------------------------------------------------------------------------

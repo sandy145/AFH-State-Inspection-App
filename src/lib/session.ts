@@ -47,7 +47,7 @@ export async function createSession(userId: string): Promise<void> {
   store.set(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: env.isProduction,
+    secure: env.cookieSecure,
     path: "/",
     expires: expiresAt,
   });

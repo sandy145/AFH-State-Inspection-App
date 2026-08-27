@@ -140,11 +140,63 @@ class S3Storage implements DocumentStorageService {
   }
 }
 
+/**
+ * Bytes in Postgres.
+ *
+ * For deployments with no object store attached — a serverless demo, or a
+ * reviewer running the app with nothing but a database. Access still goes
+ * exclusively through the authorization-checked download route, so this is no
+ * more exposed than the other drivers; what it gives up is the operational
+ * properties object storage has (lifecycle rules, immutability policies, cheap
+ * large files, CDN reach), which is why ARCHITECTURE.md targets Azure Blob for
+ * production and why this driver says so in its name.
+ */
+class DatabaseStorage implements DocumentStorageService {
+  readonly driver = "database";
+
+  async put(input: { body: Buffer; fileName: string; mimeType: string }): Promise<StoredObject> {
+    const { prisma } = await import("@/lib/prisma");
+    const storageKey = newStorageKey(input.fileName);
+    const checksum = sha256(input.body);
+
+    await prisma.storedObject.create({
+      data: {
+        storageKey,
+        mimeType: input.mimeType,
+        sizeBytes: input.body.byteLength,
+        checksum,
+        // Prisma's Bytes maps to Uint8Array; Buffer is one but carries a wider
+        // ArrayBufferLike, so narrow it explicitly.
+        body: new Uint8Array(input.body),
+      },
+    });
+
+    return { storageKey, checksum, sizeBytes: input.body.byteLength };
+  }
+
+  async get(storageKey: string): Promise<Buffer> {
+    const { prisma } = await import("@/lib/prisma");
+    const stored = await prisma.storedObject.findUnique({ where: { storageKey } });
+    if (!stored) throw new Error("Stored object not found");
+    return Buffer.from(stored.body);
+  }
+
+  async signedDownloadUrl(): Promise<string | null> {
+    // No out-of-band URL: downloads stream through the route that checks access.
+    return null;
+  }
+}
+
 let instance: DocumentStorageService | undefined;
 
 export function documentStorage(): DocumentStorageService {
   if (!instance) {
-    instance = env.storageDriver === "s3" ? new S3Storage() : new LocalFileStorage(env.storageLocalPath);
+    instance =
+      env.storageDriver === "s3"
+        ? new S3Storage()
+        : env.storageDriver === "database"
+          ? new DatabaseStorage()
+          : new LocalFileStorage(env.storageLocalPath);
   }
   return instance;
 }

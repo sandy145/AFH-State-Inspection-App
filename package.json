@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -24,7 +24,8 @@
     "test:domain": "vitest run tests/domain",
     "screenshots": "node scripts/screenshots.mjs",
     "test:e2e": "node scripts/e2e-smoke.mjs",
-    "reminders": "tsx scripts/send-deadline-reminders.ts"
+    "reminders": "tsx scripts/send-deadline-reminders.ts",
+    "vercel-build": "prisma generate && node scripts/deploy-prepare.mjs && next build"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
