@@ -1,4 +1,5 @@
 import "server-only";
+import { notFound } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canViewInspection } from "@/domain/authz";
@@ -163,5 +164,35 @@ export class AccessDeniedError extends Error {
   constructor() {
     super("You do not have access to this record.");
     this.name = "AccessDeniedError";
+  }
+}
+
+/**
+ * Page-level variants that render the not-found page instead of throwing.
+ *
+ * A page uses these; a server action uses the `require*Access` functions above
+ * and reports the refusal in its own result. Both paths deliberately behave the
+ * same whether the record is missing or simply not the caller's — see
+ * AccessDeniedError.
+ */
+export async function requireInspectionAccessOrNotFound(
+  actor: Actor,
+  inspectionId: string,
+): Promise<InspectionScope> {
+  try {
+    return await requireInspectionAccess(actor, inspectionId);
+  } catch {
+    notFound();
+  }
+}
+
+export async function requireFindingAccessOrNotFound(
+  actor: Actor,
+  findingId: string,
+): Promise<InspectionScope> {
+  try {
+    return await requireFindingAccess(actor, findingId);
+  } catch {
+    notFound();
   }
 }
