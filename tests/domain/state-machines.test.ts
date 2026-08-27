@@ -44,6 +44,13 @@ describe("finding lifecycle", () => {
     }
   });
 
+  it("permits the override path, which the guard -- not this table -- polices", () => {
+    // A citation finalized over unreviewed evidence leaves the finding at
+    // PROVIDER_RESPONDED, so the edge has to exist. What stops it happening
+    // without justification is evaluateCitationGuard, tested separately.
+    expect(canTransition(FINDING_TRANSITIONS, "PROVIDER_RESPONDED", "CITATION_ISSUED")).toBe(true);
+  });
+
   it("refuses to jump straight from draft to a citation", () => {
     expect(canTransition(FINDING_TRANSITIONS, "DRAFT", "CITATION_ISSUED")).toBe(false);
     expect(() => assertTransition(FINDING_TRANSITIONS, "DRAFT", "CITATION_ISSUED", "Finding")).toThrow(

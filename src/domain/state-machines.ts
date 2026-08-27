@@ -46,7 +46,13 @@ export const FINDING_TRANSITIONS: TransitionTable<FindingStatus> = {
     "CLOSED",
   ],
   EVIDENCE_REQUESTED: ["PROVIDER_RESPONDED", "UNDER_INSPECTOR_REVIEW", "POTENTIAL_FINDING", "CLOSED"],
-  PROVIDER_RESPONDED: ["UNDER_INSPECTOR_REVIEW", "EVIDENCE_REQUESTED"],
+  // CITATION_ISSUED is reachable here only through an authorized override: the
+  // provider has responded and nobody has reviewed it yet. The transition table
+  // describes which lifecycle moves exist; it is `evaluateCitationGuard` in
+  // domain/evidence.ts, not this table, that refuses the unreviewed case. Keep
+  // the two concerns apart — encoding the guard here as well would make the
+  // override path unrepresentable rather than exceptional.
+  PROVIDER_RESPONDED: ["UNDER_INSPECTOR_REVIEW", "EVIDENCE_REQUESTED", "CITATION_ISSUED"],
   UNDER_INSPECTOR_REVIEW: [
     "ADDITIONAL_INFO_REQUESTED",
     "RESOLVED_NO_VIOLATION",

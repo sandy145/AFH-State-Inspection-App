@@ -14,6 +14,15 @@ import type { Actor, InspectionScope } from "@/domain/types";
  * re-checks each single-record fetch against the same predicate.
  */
 
+/**
+ * A filter that matches nothing.
+ *
+ * `id: { in: [] }` rather than a sentinel string: the id columns are `uuid`, so
+ * a placeholder like "__none__" makes PostgreSQL raise a cast error instead of
+ * returning an empty set — turning "this provider has no homes" into a 500.
+ */
+const MATCHES_NOTHING = { in: [] as string[] };
+
 /** Filter restricting inspections to what the actor may see. */
 export function inspectionScope(actor: Actor): Prisma.InspectionWhereInput {
   switch (actor.role) {
@@ -22,7 +31,7 @@ export function inspectionScope(actor: Actor): Prisma.InspectionWhereInput {
       return {};
     case "PROVIDER":
       // An empty facility list must match nothing, not everything.
-      return { facilityId: { in: actor.facilityIds.length ? actor.facilityIds : ["__none__"] } };
+      return { facilityId: actor.facilityIds.length ? { in: actor.facilityIds } : MATCHES_NOTHING };
     case "INSPECTOR":
       return {
         OR: [
@@ -39,7 +48,7 @@ export function inspectionScope(actor: Actor): Prisma.InspectionWhereInput {
         ],
       };
     default:
-      return { id: "__none__" };
+      return { id: MATCHES_NOTHING };
   }
 }
 
@@ -48,13 +57,13 @@ export function facilityScope(actor: Actor): Prisma.FacilityWhereInput {
     case "RCS_ADMIN":
       return {};
     case "PROVIDER":
-      return { id: { in: actor.facilityIds.length ? actor.facilityIds : ["__none__"] } };
+      return { id: actor.facilityIds.length ? { in: actor.facilityIds } : MATCHES_NOTHING };
     case "INSPECTOR":
     case "FIELD_MANAGER":
     case "IDR_MANAGER":
       return actor.regionId ? { regionId: actor.regionId } : {};
     default:
-      return { id: "__none__" };
+      return { id: MATCHES_NOTHING };
   }
 }
 
