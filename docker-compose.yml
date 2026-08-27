@@ -1,0 +1,80 @@
+# Local development stack for the AFH Compliance Portal.
+#
+#   docker compose up -d
+#
+# Nothing here is a production topology. In production, PostgreSQL is Azure
+# Database for PostgreSQL, object storage is Azure Blob Storage, and mail goes
+# through an approved state service — see ARCHITECTURE.md. The application talks
+# to all three through interfaces, so only environment variables change.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: afh-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: afh
+      POSTGRES_PASSWORD: afh_dev_password
+      POSTGRES_DB: afh_portal
+    ports:
+      - "5432:5432"
+    volumes:
+      - afh-postgres-data:/var/lib/postgresql/data
+      # Creates the separate database the integration tests run against.
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U afh -d afh_portal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # S3-compatible object storage, standing in for Azure Blob Storage.
+  minio:
+    image: minio/minio:latest
+    container_name: afh-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      - afh-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Creates the evidence bucket once MinIO is up, then exits.
+  minio-init:
+    image: minio/mc:latest
+    container_name: afh-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/afh-evidence &&
+      mc anonymous set none local/afh-evidence &&
+      echo 'Bucket afh-evidence ready and private.'
+      "
+
+  # Captures outbound mail so notification emails can be inspected without
+  # sending anything. Web UI on http://localhost:8025
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: afh-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI
+    logging:
+      driver: none
+
+volumes:
+  afh-postgres-data:
+  afh-minio-data:

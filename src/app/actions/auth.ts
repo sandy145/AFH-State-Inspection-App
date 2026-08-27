@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/services/identity";
 import { createSession, currentUser, destroySession } from "@/lib/session";
 import { homePathForRole } from "@/domain/authz";
+import { rateLimit } from "@/lib/rate-limit";
+import { clientIpAddress } from "@/lib/session";
 import * as audit from "@/data/audit";
 
 /**
@@ -40,6 +42,26 @@ export async function signIn(_prev: AuthState, formData: FormData): Promise<Auth
   }
 
   const email = parsed.data.email.trim().toLowerCase();
+
+  // Two windows: one per account so a single target cannot be ground down, and
+  // one per source address so a spray across many accounts is throttled too.
+  const ip = (await clientIpAddress()) ?? "unknown";
+  const perAccount = rateLimit(`signin:email:${email}`, 5, 15 * 60);
+  const perAddress = rateLimit(`signin:ip:${ip}`, 20, 15 * 60);
+
+  if (!perAccount.allowed || !perAddress.allowed) {
+    await audit.recordAnonymous({
+      action: "USER_SIGN_IN_FAILED",
+      entityType: "User",
+      attemptedEmail: email,
+      reason: "rate limited",
+    });
+    const wait = Math.max(perAccount.retryAfterSeconds, perAddress.retryAfterSeconds);
+    return {
+      error: `Too many sign-in attempts. Try again in ${Math.ceil(wait / 60)} minute(s).`,
+    };
+  }
+
   const user = await prisma.user.findUnique({ where: { email } });
 
   const stored = user?.passwordHash ?? "scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAA";

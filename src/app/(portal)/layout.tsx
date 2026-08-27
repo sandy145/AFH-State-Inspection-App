@@ -14,8 +14,9 @@ export default async function PortalLayout({ children }: { children: React.React
 
   if (!user) {
     // Preserve where they were heading so an emailed deep link survives login.
+    // The header is set by src/middleware.ts.
     const headerList = await headers();
-    const path = headerList.get("x-invoke-path") ?? headerList.get("x-pathname");
+    const path = headerList.get("x-pathname");
     redirect(path ? `/login?next=${encodeURIComponent(path)}` : "/login");
   }
 
