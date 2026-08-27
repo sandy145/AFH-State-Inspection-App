@@ -7,7 +7,7 @@ import { currentUser, toActor } from "@/lib/session";
 import { AccessDeniedError, requireFindingAccess } from "@/data/scope";
 import { canRequestEvidence, canReviewEvidence, canSubmitEvidence } from "@/domain/authz";
 import { createEvidenceRequest, reviewEvidence, submitEvidence } from "@/data/evidence";
-import { postMessage } from "@/data/cases";
+import { acknowledgeConsultation, postMessage } from "@/data/cases";
 import { prisma } from "@/lib/prisma";
 import { DomainError } from "@/domain/types";
 import type { ReviewOutcome } from "@/domain/types";
@@ -185,6 +185,26 @@ export async function postMessageAction(_prev: ActionState, formData: FormData):
     await postMessage(user, findingId, body, isInternal);
     revalidatePath(`/provider/findings/${findingId}`);
     return { success: "Message sent." };
+  } catch (error) {
+    return { error: messageFor(error) };
+  }
+}
+
+/** Provider acknowledgement of a consultation (§12). Records receipt, not agreement. */
+export async function acknowledgeConsultationAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await currentUser();
+  if (!user) return { error: "Your session has expired. Sign in again." };
+
+  const findingId = String(formData.get("findingId") ?? "");
+
+  try {
+    await requireFindingAccess(toActor(user), findingId);
+    await acknowledgeConsultation(user, findingId);
+    revalidatePath(`/provider/findings/${findingId}`);
+    return { success: "Acknowledged. This records that you have seen it." };
   } catch (error) {
     return { error: messageFor(error) };
   }

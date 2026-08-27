@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DescriptionList } from "@/components/ui/misc";
 import { MessageForm } from "@/components/message-form";
+import { markFindingMessagesRead } from "@/data/cases";
 import {
   ConsultationForm,
   DraftCitationForm,
@@ -45,6 +46,7 @@ export default async function FindingPage({
   const { id, findingId } = await params;
   const user = (await currentUser())!;
   const scope = await requireFindingAccessOrNotFound(toActor(user), findingId);
+  await markFindingMessagesRead(user, findingId);
 
   const finding = await prisma.finding.findUnique({
     where: { id: findingId },

@@ -374,3 +374,71 @@ export async function postMessage(
 
   return message;
 }
+
+/**
+ * Marks the other side's messages on a finding as read.
+ *
+ * Called when someone opens the finding. Only messages written by the *other*
+ * party are marked, so the unread badge means "waiting on you" rather than
+ * "exists". Internal notes are excluded for providers by the same filter that
+ * hides them.
+ */
+export async function markFindingMessagesRead(actor: SessionUser, findingId: string): Promise<void> {
+  await prisma.findingMessage.updateMany({
+    where: {
+      findingId,
+      readAt: null,
+      isInternal: false,
+      author: actor.role === "PROVIDER" ? { role: { not: "PROVIDER" } } : { role: "PROVIDER" },
+    },
+    data: { readAt: new Date() },
+  });
+}
+
+/**
+ * A provider acknowledging a consultation (§12).
+ *
+ * Acknowledgement records that the provider saw it. It is not agreement, and it
+ * has no bearing on the consultation itself — which is why it writes a timestamp
+ * and an audit row and changes nothing else.
+ */
+export async function acknowledgeConsultation(actor: SessionUser, findingId: string): Promise<void> {
+  if (actor.role !== "PROVIDER") {
+    throw new DomainError("NOT_PERMITTED", "Only the provider can acknowledge a consultation.");
+  }
+
+  const consultation = await prisma.consultation.findUniqueOrThrow({
+    where: { findingId },
+    include: {
+      finding: { select: { reference: true, inspectionId: true, inspection: { select: { caseNumber: true } } } },
+    },
+  });
+
+  if (consultation.providerAcknowledgedAt) return;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.consultation.update({
+      where: { id: consultation.id },
+      data: { providerAcknowledgedAt: new Date(), providerAcknowledgedById: actor.id },
+    });
+
+    await audit.record(
+      actor,
+      {
+        action: "CONSULTATION_ISSUED",
+        entityType: "Consultation",
+        entityId: consultation.id,
+        caseNumber: consultation.finding.inspection.caseNumber,
+        newValue: "provider acknowledged",
+      },
+      tx,
+    );
+
+    await audit.timeline(tx, {
+      inspectionId: consultation.finding.inspectionId,
+      actorId: actor.id,
+      eventType: "CONSULTATION_ACKNOWLEDGED",
+      description: `Provider acknowledged the consultation on ${consultation.finding.reference}`,
+    });
+  });
+}

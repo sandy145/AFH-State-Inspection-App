@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { currentUser, toActor } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { requireFindingAccessOrNotFound } from "@/data/scope";
+import { markFindingMessagesRead } from "@/data/cases";
 import { IDR_NOTICE } from "@/data/idr";
 import { formatDate, formatDateTime } from "@/domain/deadlines";
 import {
@@ -16,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DescriptionList, PageHeader } from "@/components/ui/misc";
 import { MessageForm } from "@/components/message-form";
-import { DisputeForm } from "./dispute-form";
+import { AcknowledgeConsultationForm, DisputeForm } from "./dispute-form";
 
 export const metadata = { title: "Finding" };
 
@@ -30,6 +31,8 @@ export default async function ProviderFindingPage({ params }: { params: Promise<
   const { id } = await params;
   const user = (await currentUser())!;
   await requireFindingAccessOrNotFound(toActor(user), id);
+  // Opening the finding is what clears its unread badge.
+  await markFindingMessagesRead(user, id);
 
   const finding = await prisma.finding.findUnique({
     where: { id },
@@ -219,8 +222,24 @@ export default async function ProviderFindingPage({ params }: { params: Promise<
                   items={[
                     { label: "Issue", value: finding.consultation.issueDescription },
                     { label: "Issued", value: formatDate(finding.consultation.issuedAt) },
+                    {
+                      label: "Acknowledged",
+                      value: finding.consultation.providerAcknowledgedAt
+                        ? formatDate(finding.consultation.providerAcknowledgedAt)
+                        : "Not yet",
+                    },
                   ]}
                 />
+
+                {finding.consultation.providerAcknowledgedAt ? null : (
+                  <div className="border-t pt-4">
+                    <p className="mb-2 text-sm text-muted-foreground">
+                      Acknowledging records that you have seen this. It is not an agreement, and it
+                      does not change the consultation.
+                    </p>
+                    <AcknowledgeConsultationForm findingId={finding.id} />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ) : null}

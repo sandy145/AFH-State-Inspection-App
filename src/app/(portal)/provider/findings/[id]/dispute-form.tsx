@@ -1,6 +1,7 @@
 "use client";
 
 import { requestIDRAction } from "@/app/actions/outcomes";
+import { acknowledgeConsultationAction } from "@/app/actions/evidence";
 import { ActionForm } from "@/components/forms";
 import { Field, Select, Textarea } from "@/components/ui/field";
 import { IDR_METHOD_LABELS } from "@/domain/status";
@@ -28,6 +29,19 @@ export function DisputeForm({ citationId }: { citationId: string }) {
       <Field label="Supporting evidence you can provide" htmlFor="supportingEvidence">
         <Textarea id="supportingEvidence" name="supportingEvidence" />
       </Field>
+    </ActionForm>
+  );
+}
+
+export function AcknowledgeConsultationForm({ findingId }: { findingId: string }) {
+  return (
+    <ActionForm
+      action={acknowledgeConsultationAction}
+      submitLabel="I have seen this"
+      variant="secondary"
+      className="space-y-2"
+    >
+      <input type="hidden" name="findingId" value={findingId} />
     </ActionForm>
   );
 }
