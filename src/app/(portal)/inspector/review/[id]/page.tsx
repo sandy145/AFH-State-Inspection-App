@@ -13,6 +13,7 @@ import { DeadlineChip } from "@/components/ui/deadline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DescriptionList, PageHeader } from "@/components/ui/misc";
+import { EvidenceViewer } from "@/components/evidence-viewer";
 import { ReviewForm } from "./review-form";
 
 export const metadata = { title: "Review evidence" };
@@ -204,6 +205,16 @@ export default async function ReviewSubmissionPage({ params }: { params: Promise
               />
             </CardHeader>
             <CardContent className="space-y-4">
+              <EvidenceViewer
+                files={submission.files.map((file) => ({
+                  id: file.documentVersion.id,
+                  fileName: file.documentVersion.fileName,
+                  mimeType: file.documentVersion.mimeType,
+                  version: file.documentVersion.version,
+                  sizeBytes: file.documentVersion.sizeBytes,
+                }))}
+              />
+
               <ul className="space-y-2">
                 {submission.files.map((file) => (
                   <li key={file.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">

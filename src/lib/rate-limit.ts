@@ -26,6 +26,29 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
+/**
+ * Reads a window without consuming from it.
+ *
+ * Sign-in checks this before verifying a password and only consumes on failure,
+ * so someone who signs in correctly every day is never rate limited, while
+ * repeated failures still lock out.
+ */
+export function isRateLimited(key: string, limit: number): RateLimitResult {
+  const now = Date.now();
+  const existing = windows.get(key);
+
+  if (!existing || existing.resetAt <= now) {
+    return { allowed: true, remaining: limit, retryAfterSeconds: 0 };
+  }
+
+  return {
+    allowed: existing.count < limit,
+    remaining: Math.max(0, limit - existing.count),
+    retryAfterSeconds: Math.ceil((existing.resetAt - now) / 1000),
+  };
+}
+
+/** Consumes one attempt from the window. */
 export function rateLimit(key: string, limit: number, windowSeconds: number): RateLimitResult {
   const now = Date.now();
   const existing = windows.get(key);

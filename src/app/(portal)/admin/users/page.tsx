@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
-import { currentUser, toActor } from "@/lib/session";
-import { canAdminister, ROLE_LABELS } from "@/domain/authz";
+import { currentUser } from "@/lib/session";
+import { ROLE_LABELS } from "@/domain/authz";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/domain/deadlines";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -13,7 +12,6 @@ export const metadata = { title: "Users" };
 
 export default async function UsersAdmin() {
   const user = (await currentUser())!;
-  if (!canAdminister(toActor(user))) redirect("/");
 
   const [users, regions, facilities] = await Promise.all([
     prisma.user.findMany({

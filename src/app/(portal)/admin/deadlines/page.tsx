@@ -1,6 +1,3 @@
-import { redirect } from "next/navigation";
-import { currentUser, toActor } from "@/lib/session";
-import { canAdminister } from "@/domain/authz";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/domain/deadlines";
 import { Alert } from "@/components/ui/status-badge";
@@ -19,8 +16,6 @@ export const metadata = { title: "Deadline configuration" };
  * so — nobody should discover that by reading the seed file.
  */
 export default async function DeadlinesAdmin() {
-  const user = (await currentUser())!;
-  if (!canAdminister(toActor(user))) redirect("/");
 
   const [rules, holidays] = await Promise.all([
     prisma.deadlineRule.findMany({ orderBy: { key: "asc" } }),

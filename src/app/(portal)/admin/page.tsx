@@ -1,7 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { currentUser, toActor } from "@/lib/session";
-import { canAdminister } from "@/domain/authz";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader, StatCard } from "@/components/ui/misc";
@@ -10,8 +7,6 @@ import { ConfigurationForm } from "./configuration-form";
 export const metadata = { title: "Administration" };
 
 export default async function AdminOverview() {
-  const user = (await currentUser())!;
-  if (!canAdminister(toActor(user))) redirect("/");
 
   const [users, facilities, inspections, regulations, configuration] = await Promise.all([
     prisma.user.count(),

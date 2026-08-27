@@ -1,6 +1,3 @@
-import { redirect } from "next/navigation";
-import { currentUser, toActor } from "@/lib/session";
-import { canAdminister } from "@/domain/authz";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/domain/deadlines";
 import { Cell, DataTable, Row } from "@/components/ui/table";
@@ -35,8 +32,6 @@ export default async function AuditAdmin({
 }: {
   searchParams: Promise<{ action?: string; q?: string }>;
 }) {
-  const user = (await currentUser())!;
-  if (!canAdminister(toActor(user))) redirect("/");
 
   const { action = "ALL", q = "" } = await searchParams;
 

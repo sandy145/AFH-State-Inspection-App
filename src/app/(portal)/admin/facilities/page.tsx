@@ -1,7 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { currentUser, toActor } from "@/lib/session";
-import { canAdminister } from "@/domain/authz";
 import { prisma } from "@/lib/prisma";
 import { facilityDirectory, licensingSystem } from "@/services/external-systems";
 import { formatDate } from "@/domain/deadlines";
@@ -19,8 +16,6 @@ export const metadata = { title: "Adult family homes" };
  * the LicensingSystemService rather than from a column in this database.
  */
 export default async function FacilitiesAdmin() {
-  const user = (await currentUser())!;
-  if (!canAdminister(toActor(user))) redirect("/");
 
   const facilities = await prisma.facility.findMany({
     include: {

@@ -159,6 +159,8 @@ fails the seed.
 | `npm run seed` | Reseed demo data |
 | `npm run db:migrate` | Create and apply a migration |
 | `npm run db:studio` | Prisma Studio |
+| `npm run test:e2e` | Browser smoke test against a running instance |
+| `npm run reminders` | Send due-soon and overdue reminders (run on a schedule) |
 | `npm run screenshots` | Recapture `docs/screenshots` from a running instance |
 
 Integration tests use `TEST_DATABASE_URL` if set, falling back to `DATABASE_URL`.
@@ -213,17 +215,37 @@ authoritative source is the published WAC and RCW.
 
 ## Tests
 
-103 tests. The domain suite runs anywhere; the integration suite runs against real
-PostgreSQL, because receipts, version chains, audit rows and transaction boundaries
-are not things a mocked client can demonstrate.
+118 tests plus a browser smoke test. The domain suite runs anywhere; the
+integration suite runs against real PostgreSQL, because receipts, version chains,
+audit rows and transaction boundaries are not things a mocked client can
+demonstrate.
 
 Covered, among others: provider A cannot reach provider B's home, case, finding or
 document; an inspector cannot reach a case outside their assignment and region;
 evidence submission writes an audit row and issues a receipt; evidence is never
 overwritten; a citation cannot be finalized while evidence is unreviewed; it can
 once everything is reviewed; an override without justification is refused; deadline
-maths in both calendar and working days; a provider can submit a correction; and
-opening a dispute does not disturb correction status.
+maths in both calendar and working days; a provider can submit a correction;
+opening a dispute does not disturb correction status; and a case walked end to end
+leaves an audit trail with no silent steps.
+
+`npm run test:e2e` drives a real browser against a running instance: a provider
+uploads an actual file through the form, gets a receipt, the submission appears in
+the inspector's queue, and the citation guard refuses to finalize on the case where
+evidence is unreviewed. Nineteen checks, no mocks.
+
+```bash
+npm run build && npm start &
+npm run test:e2e
+```
+
+## Deadline reminders
+
+`npm run reminders` notifies providers of evidence and corrections due soon or
+overdue, and staff of approaching IDR deadlines. It is idempotent — one reminder
+per recipient, per record, per day — so running it hourly is safe and a missed run
+is caught by the next. It only notifies: it never moves a deadline and never
+changes a status. Run it as a container job or a cron entry.
 
 ## Screenshots
 

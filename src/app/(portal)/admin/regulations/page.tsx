@@ -1,6 +1,3 @@
-import { redirect } from "next/navigation";
-import { currentUser, toActor } from "@/lib/session";
-import { canAdminister } from "@/domain/authz";
 import { prisma } from "@/lib/prisma";
 import { Alert } from "@/components/ui/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,8 +9,6 @@ export const metadata = { title: "Regulation references" };
 
 /** WAC / RCW reference data (§4). Findings link to these rows. */
 export default async function RegulationsAdmin() {
-  const user = (await currentUser())!;
-  if (!canAdminister(toActor(user))) redirect("/");
 
   const regulations = await prisma.regulation.findMany({
     include: { _count: { select: { findings: true, citations: true } } },

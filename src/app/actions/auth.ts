@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/services/identity";
 import { createSession, currentUser, destroySession } from "@/lib/session";
 import { homePathForRole } from "@/domain/authz";
-import { rateLimit } from "@/lib/rate-limit";
+import { isRateLimited, rateLimit } from "@/lib/rate-limit";
 import { clientIpAddress } from "@/lib/session";
 import * as audit from "@/data/audit";
 
@@ -30,6 +30,10 @@ export interface AuthState {
 
 const GENERIC_FAILURE = "Email address or password is incorrect.";
 
+const ACCOUNT_ATTEMPT_LIMIT = 5;
+const ADDRESS_ATTEMPT_LIMIT = 20;
+const ATTEMPT_WINDOW_SECONDS = 15 * 60;
+
 export async function signIn(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const parsed = credentials.safeParse({
     email: formData.get("email"),
@@ -45,9 +49,13 @@ export async function signIn(_prev: AuthState, formData: FormData): Promise<Auth
 
   // Two windows: one per account so a single target cannot be ground down, and
   // one per source address so a spray across many accounts is throttled too.
+  // Only failures consume from a window (see below), so signing in correctly --
+  // however often -- never locks anyone out.
   const ip = (await clientIpAddress()) ?? "unknown";
-  const perAccount = rateLimit(`signin:email:${email}`, 5, 15 * 60);
-  const perAddress = rateLimit(`signin:ip:${ip}`, 20, 15 * 60);
+  const accountKey = `signin:email:${email}`;
+  const addressKey = `signin:ip:${ip}`;
+  const perAccount = isRateLimited(accountKey, ACCOUNT_ATTEMPT_LIMIT);
+  const perAddress = isRateLimited(addressKey, ADDRESS_ATTEMPT_LIMIT);
 
   if (!perAccount.allowed || !perAddress.allowed) {
     await audit.recordAnonymous({
@@ -68,6 +76,9 @@ export async function signIn(_prev: AuthState, formData: FormData): Promise<Auth
   const passwordOk = await verifyPassword(parsed.data.password, stored);
 
   if (!user || !user.isActive || !user.passwordHash || !passwordOk) {
+    rateLimit(accountKey, ACCOUNT_ATTEMPT_LIMIT, ATTEMPT_WINDOW_SECONDS);
+    rateLimit(addressKey, ADDRESS_ATTEMPT_LIMIT, ATTEMPT_WINDOW_SECONDS);
+
     await audit.recordAnonymous({
       action: "USER_SIGN_IN_FAILED",
       entityType: "User",
