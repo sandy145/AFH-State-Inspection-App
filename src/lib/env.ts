@@ -1,4 +1,5 @@
 import "server-only";
+import { resolveUploadLimits } from "@/lib/upload-limits";
 
 /**
  * Environment access, validated once at module load.
@@ -125,7 +126,9 @@ export const env = {
     forcePathStyle: bool("S3_FORCE_PATH_STYLE", true),
   },
 
-  maxUploadBytes: int("MAX_UPLOAD_BYTES", 25 * 1024 * 1024),
+  // Resolved centrally so the limit the form prints, the limit the domain rule
+  // enforces and the limit Next.js accepts are the same number.
+  maxUploadBytes: resolveUploadLimits(process.env).maxUploadBytes,
 
   mailDriver: optional("MAIL_DRIVER", "log") as "log" | "smtp",
   mailFrom: optional("MAIL_FROM", "AFH Compliance Portal <no-reply@afh-portal.local.test>"),

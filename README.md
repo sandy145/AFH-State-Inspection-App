@@ -215,7 +215,7 @@ authoritative source is the published WAC and RCW.
 
 ## Tests
 
-118 tests plus a browser smoke test. The domain suite runs anywhere; the
+145 tests plus a 76-check browser suite. The domain suite runs anywhere; the
 integration suite runs against real PostgreSQL, because receipts, version chains,
 audit rows and transaction boundaries are not things a mocked client can
 demonstrate.
@@ -229,10 +229,16 @@ maths in both calendar and working days; a provider can submit a correction;
 opening a dispute does not disturb correction status; and a case walked end to end
 leaves an audit trail with no silent steps.
 
-`npm run test:e2e` drives a real browser against a running instance: a provider
-uploads an actual file through the form, gets a receipt, the submission appears in
-the inspector's queue, and the citation guard refuses to finalize on the case where
-evidence is unreviewed. Nineteen checks, no mocks.
+`npm run test:e2e` drives a real browser against a running instance — 76 checks
+across 12 scenarios, no mocks. It covers sign-in and role routing, a real 2 MB
+file upload and its receipt, oversized files being refused before anything is
+sent, the review queue and determinations, the citation guard blocking and
+explaining itself, tenant isolation over HTTP, every case-record tab, the
+provider's own pages, and accessibility basics (one main landmark, one h1, a skip
+link, captioned tables, labelled controls).
+
+It writes real data, so it is safe to run repeatedly but is not read-only — point
+it at a demo instance.
 
 ```bash
 npm run build && npm start &

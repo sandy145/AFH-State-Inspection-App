@@ -9,6 +9,8 @@ import { canRequestEvidence, canReviewEvidence, canSubmitEvidence } from "@/doma
 import { createEvidenceRequest, reviewEvidence, submitEvidence } from "@/data/evidence";
 import { acknowledgeConsultation, postMessage } from "@/data/cases";
 import { prisma } from "@/lib/prisma";
+import { env } from "@/lib/env";
+import { formatBytes } from "@/lib/upload-limits";
 import { DomainError } from "@/domain/types";
 import type { ReviewOutcome } from "@/domain/types";
 
@@ -28,6 +30,17 @@ export interface ActionState {
 function messageFor(error: unknown): string {
   if (error instanceof DomainError) return error.message;
   if (error instanceof AccessDeniedError) return error.message;
+
+  // The request never reached the action's own validation: the runtime refused
+  // the body first. Saying "something went wrong" for this sends someone
+  // hunting a fault that is really just a file bigger than the request cap.
+  if (error instanceof Error && /body exceeded|request entity too large|payload too large/i.test(error.message)) {
+    return (
+      `That file is too large to upload here. The limit is ${formatBytes(env.maxUploadBytes)} per submission. ` +
+      "Try sending fewer files at once, or a smaller scan."
+    );
+  }
+
   console.error("[action] unexpected failure", error);
   return "Something went wrong. Nothing was saved. Please try again.";
 }

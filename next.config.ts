@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+import { resolveUploadLimits } from "./src/lib/upload-limits";
+
+// Next.js caps server-action request bodies at 1 MB unless told otherwise. The
+// evidence upload is a server action, so that default silently overrode the
+// application's own limit and rejected ordinary documents.
+const { bodySizeLimitBytes } = resolveUploadLimits(process.env);
 
 /**
  * Secure headers are applied here rather than in a proxy so the prototype
@@ -34,6 +40,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   serverExternalPackages: ["@prisma/client", "nodemailer"],
+  experimental: {
+    serverActions: { bodySizeLimit: bodySizeLimitBytes },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

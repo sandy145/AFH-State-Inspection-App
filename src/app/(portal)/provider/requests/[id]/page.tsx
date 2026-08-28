@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireFindingAccessOrNotFound } from "@/data/scope";
 import { configInt, CONFIG_KEYS } from "@/data/config";
 import { env } from "@/lib/env";
+import { formatBytes } from "@/lib/upload-limits";
 import { formatDate, formatDateTime } from "@/domain/deadlines";
 import { REVIEW_OUTCOME_META, SUBMISSION_STATUS_META } from "@/domain/status";
 import { Alert, StatusBadge } from "@/components/ui/status-badge";
@@ -116,7 +117,8 @@ export default async function EvidenceRequestPage({ params }: { params: Promise<
                   allowMultipleFiles={request.allowMultipleFiles}
                   explanationRequired={request.explanationRequired}
                   supersedesSubmissionId={latestSubmission?.id ?? null}
-                  maxUploadMb={Math.floor(env.maxUploadBytes / (1024 * 1024))}
+                  maxUploadLabel={formatBytes(env.maxUploadBytes)}
+                  maxUploadBytes={env.maxUploadBytes}
                 />
               </CardContent>
             </Card>

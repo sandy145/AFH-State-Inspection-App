@@ -23,9 +23,10 @@
     "test:integration": "vitest run tests/integration",
     "test:domain": "vitest run tests/domain",
     "screenshots": "node scripts/screenshots.mjs",
-    "test:e2e": "node scripts/e2e-smoke.mjs",
+    "test:e2e": "node scripts/e2e-scenarios.mjs",
     "reminders": "tsx scripts/send-deadline-reminders.ts",
-    "vercel-build": "prisma generate && node scripts/deploy-prepare.mjs && next build"
+    "vercel-build": "prisma generate && node scripts/deploy-prepare.mjs && next build",
+    "test:e2e:smoke": "node scripts/e2e-smoke.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
