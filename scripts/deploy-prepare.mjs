@@ -15,6 +15,9 @@
  * be produced for inspection without one.
  */
 import { execSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { deriveDirectUrl } from "./lib/derive-direct-url.mjs";
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const shouldSeed = process.env.RUN_SEED_ON_BUILD === "true";
@@ -27,7 +30,14 @@ const onHostingPlatform = Boolean(
 
 function run(command, label) {
   console.info(`\n▸ ${label}`);
-  execSync(command, { stdio: "inherit", env: process.env });
+
+  // npm puts node_modules/.bin on PATH for its own scripts, but this file should
+  // work the same when invoked directly — otherwise it fails with a bare
+  // "command not found" that says nothing about what is missing.
+  const binDir = path.resolve(fileURLToPath(new URL("..", import.meta.url)), "node_modules/.bin");
+  const env = { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}` };
+
+  execSync(command, { stdio: "inherit", env });
 }
 
 if (!hasDatabase) {
@@ -64,11 +74,29 @@ if (!hasDatabase) {
 
 // Migrations need a session connection; the runtime uses a transaction pooler.
 // Prisma reads DIRECT_DATABASE_URL for this via `directUrl` in the schema.
+//
+// Rather than demand a second variable that is a mechanical transformation of
+// the first, derive it. Supabase's transaction pooler is port 6543 and its
+// session pooler is 5432 on the same host, and the pgbouncer flags exist only
+// to disable prepared statements for the pooled runtime connection.
 if (!process.env.DIRECT_DATABASE_URL) {
-  console.warn(
-    "DIRECT_DATABASE_URL is not set — migrations will use the pooled connection, " +
-      "which can fail for DDL in transaction mode.",
-  );
+  const derived = deriveDirectUrl(process.env.DATABASE_URL);
+
+  if (derived) {
+    process.env.DIRECT_DATABASE_URL = derived;
+    console.info(
+      "▸ DIRECT_DATABASE_URL is not set — derived a session-mode connection from " +
+        "DATABASE_URL (port 6543 → 5432, pooling flags removed).",
+    );
+  } else {
+    // Not a recognised pooled URL, so there is nothing to transform. Using the
+    // same URL is right for a direct connection and merely suboptimal otherwise.
+    process.env.DIRECT_DATABASE_URL = process.env.DATABASE_URL;
+    console.warn(
+      "▸ DIRECT_DATABASE_URL is not set and DATABASE_URL does not look pooled — " +
+        "using it unchanged for migrations.",
+    );
+  }
 }
 
 run("prisma migrate deploy", "Applying database migrations");

@@ -59,19 +59,21 @@ The role is `afh_portal_app`, so the pooler username is
 ```
 DATABASE_URL
 postgresql://afh_portal_app.kjcpsxvnswucwxnswigy:<DB-PASSWORD>@<POOLER-HOST>:6543/postgres?schema=afh_portal&pgbouncer=true&connection_limit=1
-
-DIRECT_DATABASE_URL
-postgresql://afh_portal_app.kjcpsxvnswucwxnswigy:<DB-PASSWORD>@<POOLER-HOST>:5432/postgres?schema=afh_portal
 ```
+
+`DIRECT_DATABASE_URL` is optional. Migrations need a session connection, and the
+build derives one from the URL above — same host and credentials, port 5432
+instead of 6543, without the pooling flags. Set it explicitly only if your
+session endpoint differs from that.
 
 `<POOLER-HOST>` is the host Supabase shows you — `aws-0-us-east-1.pooler.supabase.com`
 or `aws-1-us-east-1.pooler.supabase.com` depending on which Supavisor cluster the
 project sits on. Copy it from the dashboard rather than guessing.
 
-Why two: port **6543** is transaction mode, which is what serverless functions
-need and what the app uses at runtime; `pgbouncer=true` turns off prepared
-statements, which transaction mode does not support. Port **5432** is session
-mode, which is what `prisma migrate deploy` needs for DDL.
+Port **6543** is transaction mode, which is what serverless functions need and
+what the app uses at runtime; `pgbouncer=true` turns off prepared statements,
+which transaction mode does not support. Port **5432** is session mode, which is
+what `prisma migrate deploy` needs for DDL.
 
 ### Application
 
