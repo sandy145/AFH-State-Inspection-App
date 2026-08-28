@@ -76,25 +76,25 @@ mode, which is what `prisma migrate deploy` needs for DDL.
 ### Application
 
 ```
-SESSION_SECRET      <the value handed to you separately, or generate one:
+SESSION_SECRET      <generate one:
                      node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))">
 APP_ENV             demo
-NODE_ENV            production
-APP_URL             https://<your-vercel-domain>
-STORAGE_DRIVER      database
-MAIL_DRIVER         log
 MAX_UPLOAD_BYTES    10485760
 ```
 
+`APP_URL` and `STORAGE_DRIVER` are detected from the platform and do not need
+setting: the URL comes from `VERCEL_PROJECT_PRODUCTION_URL`, and the storage
+driver defaults to `database` on Vercel because the filesystem there is
+ephemeral. Set either explicitly to override, for example behind a custom domain.
+
 `APP_ENV=demo` rather than `production` is deliberate: it permits the demo
 accounts to exist. The session cookie is still `Secure`, because that follows the
-scheme in `APP_URL`, not `APP_ENV`.
+scheme of the application URL, not `APP_ENV`.
 
-`STORAGE_DRIVER=database` keeps uploaded evidence in Postgres. Vercel's filesystem
-is ephemeral, and no object store is attached. Downloads still go through the
-authorization-checked route. See ARCHITECTURE.md — Azure Blob is the production
-target, and `MAX_UPLOAD_BYTES` is lowered here because bytes are travelling
-through a database connection.
+Evidence is kept in Postgres by the `database` storage driver, since no object
+store is attached. Downloads still go through the authorization-checked route.
+See ARCHITECTURE.md — Azure Blob is the production target, and `MAX_UPLOAD_BYTES`
+is lowered here because bytes travel through a database connection.
 
 ### Demo data — first deploy only
 
@@ -156,6 +156,10 @@ finalize on the case with unreviewed evidence.
   editor, then update both Vercel variables.
 
 ## Things that will bite
+
+**Environment variables seem to be ignored.** They are applied at build time.
+Adding them changes nothing until the next deployment, and a deployment created
+before you added them will never see them however many times you reload.
 
 **`Can't reach database server` during build.** The direct `db.<ref>.supabase.co`
 host was used somewhere. Vercel cannot reach it — both URLs must be pooler hosts.

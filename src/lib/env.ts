@@ -33,6 +33,23 @@ function int(name: string, fallback: number): number {
 const appEnv = optional("APP_ENV", optional("NODE_ENV", "development"));
 const isProduction = appEnv === "production";
 
+/**
+ * Values the hosting platform already knows.
+ *
+ * Two of these are easy to set wrong and expensive when they are. APP_URL feeds
+ * the session cookie's Secure flag, so a mistyped one silently downgrades every
+ * session; and the local filesystem driver cannot work on an ephemeral one, so
+ * "local" is never the right default there. Taking them from the platform when
+ * it offers them removes two chances to get a deployment subtly wrong.
+ *
+ * An explicit environment variable always wins.
+ */
+const onVercel = Boolean(process.env.VERCEL);
+
+const platformUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+const defaultAppUrl = platformUrl ? `https://${platformUrl}` : "http://localhost:3000";
+const defaultStorageDriver = onVercel ? "database" : "local";
+
 const sessionSecret = optional("SESSION_SECRET", "");
 if (isProduction && (!sessionSecret || sessionSecret.includes("replace-me"))) {
   throw new Error("SESSION_SECRET must be set to a strong random value in production.");
@@ -42,7 +59,7 @@ export const env = {
   appEnv,
   isProduction,
   isDevelopmentLike: appEnv === "development" || appEnv === "test",
-  appUrl: optional("APP_URL", "http://localhost:3000"),
+  appUrl: optional("APP_URL", defaultAppUrl),
 
   /**
    * Read lazily rather than at module load.
@@ -68,7 +85,7 @@ export const env = {
    * "production", and tying Secure to APP_ENV would have shipped that demo with
    * a cookie that travels in the clear.
    */
-  cookieSecure: bool("COOKIE_SECURE", optional("APP_URL", "").startsWith("https:")),
+  cookieSecure: bool("COOKIE_SECURE", optional("APP_URL", defaultAppUrl).startsWith("https:")),
 
   /**
    * Whether the login page lists the demo accounts. Anyone can sign in with
@@ -77,7 +94,7 @@ export const env = {
   showDemoCredentials:
     bool("SHOW_DEMO_CREDENTIALS", appEnv === "development" || appEnv === "test") && !isProduction,
 
-  storageDriver: optional("STORAGE_DRIVER", "local") as "local" | "s3" | "database",
+  storageDriver: optional("STORAGE_DRIVER", defaultStorageDriver) as "local" | "s3" | "database",
   storageLocalPath: optional("STORAGE_LOCAL_PATH", ".storage"),
   s3: {
     endpoint: optional("S3_ENDPOINT", "http://localhost:9000"),
