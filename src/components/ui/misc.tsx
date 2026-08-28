@@ -16,7 +16,8 @@ export function PageHeader({
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="space-y-1">
         {eyebrow ? <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{eyebrow}</div> : null}
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        {/* Blue and unbolded, as on the reference pages. */}
+        <h1 className="text-[1.75rem] font-normal leading-tight text-primary">{title}</h1>
         {description ? <div className="max-w-3xl text-sm text-muted-foreground">{description}</div> : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -54,14 +55,14 @@ export function StatCard({
   const body = (
     <div
       className={cn(
-        "rounded-lg border bg-card p-4 shadow-sm transition-colors",
-        href ? "hover:border-primary/50 hover:bg-accent/40" : "",
-        tone === "attention" ? "border-amber-300 bg-amber-50/60" : "",
-        tone === "critical" ? "border-red-300 bg-red-50/60" : "",
+        "border border-border bg-card p-3 transition-colors",
+        href ? "hover:border-primary hover:bg-accent" : "",
+        tone === "attention" ? "border-administration bg-administration/10" : "",
+        tone === "critical" ? "border-destructive bg-destructive/5" : "",
       )}
     >
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-3xl font-semibold tabular-nums">{value}</div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
       {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
     </div>
   );
@@ -77,7 +78,7 @@ export function StatCard({
 
 export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="rounded-lg border border-dashed bg-card px-6 py-12 text-center">
+    <div className="border border-dashed border-border bg-muted px-6 py-10 text-center">
       <p className="font-medium">{title}</p>
       {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
     </div>
@@ -87,7 +88,7 @@ export function EmptyState({ title, description }: { title: string; description?
 export function SectionHeading({ children, description }: { children: React.ReactNode; description?: string }) {
   return (
     <div className="mb-3">
-      <h2 className="text-lg font-semibold tracking-tight">{children}</h2>
+      <h2 className="text-base font-semibold">{children}</h2>
       {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
     </div>
   );

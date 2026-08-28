@@ -2,30 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Visual language modelled on the Washington State DSHS / ALTSA web presence:
+ * a navy agency band above an ochre administration band, square corners, thin
+ * grey rules, blue headings in regular weight, and a charcoal footer.
+ *
+ * Colour is never the only channel for status (WCAG 2.1 AA, 1.4.1), and every
+ * pairing below clears AA contrast on its own background.
+ */
 @layer base {
   :root {
+    /* Page */
     --background: 0 0% 100%;
-    --foreground: 215 25% 15%;
+    --foreground: 0 0% 13%;
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 15%;
-    --primary: 213 74% 32%;
+    --card-foreground: 0 0% 13%;
+
+    /* Agency banner, and the administration band beneath it */
+    --banner: 213 56% 24%;
+    --banner-foreground: 0 0% 100%;
+    --banner-mark: 211 52% 35%;
+    --administration: 32 63% 48%;
+    --administration-foreground: 0 0% 13%;
+
+    /* Actions and links. 5.4:1 on white, and white on it clears AA. */
+    --primary: 210 66% 36%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 214 32% 95%;
-    --secondary-foreground: 215 25% 20%;
-    --muted: 214 32% 96%;
-    --muted-foreground: 215 16% 42%;
-    --accent: 214 32% 93%;
-    --accent-foreground: 215 25% 20%;
-    --destructive: 0 72% 38%;
+
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 0 0% 20%;
+    --muted: 210 20% 97%;
+    --muted-foreground: 0 0% 35%;
+    --accent: 210 25% 94%;
+    --accent-foreground: 0 0% 20%;
+
+    /* Status. Deliberately dark enough to read as text on their own tints. */
+    --destructive: 0 65% 34%;
     --destructive-foreground: 0 0% 100%;
-    --warning: 32 90% 34%;
+    --warning: 28 78% 30%;
     --warning-foreground: 0 0% 100%;
-    --success: 152 62% 26%;
+    --success: 152 60% 24%;
     --success-foreground: 0 0% 100%;
-    --border: 214 20% 86%;
-    --input: 214 20% 86%;
-    --ring: 213 74% 32%;
-    --radius: 0.375rem;
+
+    --border: 0 0% 80%;
+    --input: 0 0% 66%;
+    --ring: 210 66% 36%;
+    --footer: 0 0% 20%;
+    --footer-foreground: 0 0% 100%;
+
+    /* Square, in keeping with the reference. */
+    --radius: 0.125rem;
   }
 
   * {
@@ -33,12 +59,35 @@
   }
 
   body {
-    @apply bg-muted/40 text-foreground;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    @apply bg-background text-foreground;
+    font-family: "Segoe UI", "Open Sans", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue",
+      Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
   }
 
-  /* A visible focus ring on every interactive element is a hard accessibility
-     requirement here; never remove it without an equivalent replacement. */
+  /* Headings are blue and unbolded, as on the reference pages. */
+  h1 {
+    @apply text-primary;
+    font-weight: 400;
+  }
+
+  h2,
+  h3 {
+    @apply text-foreground;
+    font-weight: 600;
+  }
+
+  a {
+    @apply text-primary;
+  }
+
+  a:hover {
+    @apply underline;
+  }
+
+  /* A visible focus ring on every interactive element is a hard requirement;
+     never remove it without an equivalent replacement. */
   :focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
@@ -47,11 +96,26 @@
 @layer components {
   .skip-link {
     @apply sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50
-           focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground;
+           focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground;
+  }
+
+  /* The grouped panel with a label sitting on its top rule — the reference uses
+     a real fieldset for its search box, and so does this. */
+  .panel {
+    @apply border border-border bg-card;
+  }
+
+  .panel-legend {
+    @apply px-2 text-sm font-semibold text-foreground;
   }
 }
 
 @media print {
-  .no-print { display: none !important; }
-  body { @apply bg-white; }
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    @apply bg-white;
+  }
 }

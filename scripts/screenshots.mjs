@@ -29,7 +29,7 @@ const SHOTS = [
 ];
 
 async function signIn(page, email) {
-  await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
   await page.fill("#email", email);
   await page.fill("#password", PASSWORD);
   await Promise.all([
@@ -51,7 +51,10 @@ for (const shot of SHOTS) {
   const page = await context.newPage();
 
   if (shot.account) await signIn(page, shot.account);
-  await page.goto(`${BASE}${shot.path}`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}${shot.path}`, { waitUntil: "domcontentloaded" });
+  // Let fonts and any deferred content settle before capturing.
+  await page.waitForLoadState("load").catch(() => {});
+  await page.waitForTimeout(400);
   await page.screenshot({ path: `${OUT}/${shot.name}.png`, fullPage: true });
   console.info(`captured ${shot.name}`);
 
@@ -65,7 +68,7 @@ for (const shot of SHOTS) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1200 } });
   const page = await context.newPage();
   await signIn(page, "inspector2@example.com");
-  await page.goto(`${BASE}/inspections?q=AFH-2026-001290`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/inspections?q=AFH-2026-001290`, { waitUntil: "domcontentloaded" });
   await page.click("text=AFH-2026-001290");
   await page.click("text=Medication administration record");
   await page.waitForSelector("text=PROVIDER EVIDENCE SUBMITTED");

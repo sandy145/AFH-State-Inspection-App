@@ -22,23 +22,23 @@ export function DataTable({
   const hasRows = React.Children.count(children) > 0;
 
   return (
-    <div className={cn("w-full overflow-x-auto rounded-lg border bg-card", className)}>
+    <div className={cn("w-full overflow-x-auto border border-border bg-card", className)}>
       <table className="w-full caption-bottom text-sm">
         <caption className="sr-only">{caption}</caption>
-        <thead className="border-b bg-muted/50">
+        <thead className="border-b border-border bg-secondary">
           <tr>
             {headers.map((header) => (
               <th
                 key={header}
                 scope="col"
-                className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                className="whitespace-nowrap border-r border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-secondary-foreground last:border-r-0"
               >
                 {header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y">
+        <tbody className="divide-y divide-border">
           {hasRows ? (
             children
           ) : (
@@ -55,13 +55,13 @@ export function DataTable({
 }
 
 export function Row({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
-  return <tr className={cn("hover:bg-muted/40", className)} {...props} />;
+  return <tr className={cn("even:bg-muted/60 hover:bg-accent", className)} {...props} />;
 }
 
 export function Cell({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn("px-4 py-3 align-top", className)} {...props} />;
+  return <td className={cn("px-3 py-2 align-top", className)} {...props} />;
 }
 
 export function RowHeader({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {
-  return <th scope="row" className={cn("px-4 py-3 text-left align-top font-medium", className)} {...props} />;
+  return <th scope="row" className={cn("px-3 py-2 text-left align-top font-medium", className)} {...props} />;
 }

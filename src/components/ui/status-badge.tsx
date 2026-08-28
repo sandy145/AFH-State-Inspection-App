@@ -17,12 +17,12 @@ import type { Tone } from "@/domain/status";
  * badges stay readable in greyscale and when printed.
  */
 const TONE_STYLES: Record<Tone, string> = {
-  neutral: "bg-muted text-muted-foreground border-border",
-  info: "bg-primary/10 text-primary border-primary/25",
-  attention: "bg-amber-50 text-amber-900 border-amber-300",
-  warning: "bg-orange-50 text-orange-900 border-orange-300",
-  critical: "bg-red-50 text-red-900 border-red-300",
-  success: "bg-emerald-50 text-emerald-900 border-emerald-300",
+  neutral: "bg-muted text-foreground border-border",
+  info: "bg-primary/10 text-primary border-primary/40",
+  attention: "bg-administration/15 text-warning border-administration",
+  warning: "bg-administration/20 text-warning border-administration",
+  critical: "bg-destructive/10 text-destructive border-destructive/50",
+  success: "bg-success/10 text-success border-success/50",
 };
 
 const TONE_ICONS: Record<Tone, React.ComponentType<{ className?: string }>> = {
@@ -49,7 +49,7 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-xs font-medium",
         TONE_STYLES[tone],
         className,
       )}
@@ -78,7 +78,7 @@ export function Alert({
       // Assertive rather than polite: these carry blocking conditions a reviewer
       // has to act on, such as unreviewed evidence on a citation.
       role={tone === "critical" ? "alert" : "status"}
-      className={cn("flex gap-3 rounded-md border p-4 text-sm", TONE_STYLES[tone], className)}
+      className={cn("flex gap-3 border-l-4 border border-l-current p-3 text-sm", TONE_STYLES[tone], className)}
     >
       <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
       <div className="space-y-1">

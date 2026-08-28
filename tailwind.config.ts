@@ -2,8 +2,9 @@ import type { Config } from "tailwindcss";
 
 /**
  * Palette note: this is an operational government application, not a marketing
- * site. Backgrounds stay near-white, the accent is a restrained state blue, and
- * every status colour below is paired with an icon and a text label in the UI so
+ * site. It follows the Washington State DSHS / ALTSA visual language — a navy
+ * agency band, an ochre administration band, square corners and thin rules —
+ * and every status colour is paired with an icon and a text label in the UI so
  * colour is never the only channel (WCAG 2.1 AA, 1.4.1).
  */
 const config: Config = {
@@ -24,13 +25,23 @@ const config: Config = {
         muted: { DEFAULT: "hsl(var(--muted))", foreground: "hsl(var(--muted-foreground))" },
         accent: { DEFAULT: "hsl(var(--accent))", foreground: "hsl(var(--accent-foreground))" },
         card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
+        banner: {
+          DEFAULT: "hsl(var(--banner))",
+          foreground: "hsl(var(--banner-foreground))",
+          mark: "hsl(var(--banner-mark))",
+        },
+        administration: {
+          DEFAULT: "hsl(var(--administration))",
+          foreground: "hsl(var(--administration-foreground))",
+        },
+        footer: { DEFAULT: "hsl(var(--footer))", foreground: "hsl(var(--footer-foreground))" },
         warning: { DEFAULT: "hsl(var(--warning))", foreground: "hsl(var(--warning-foreground))" },
         success: { DEFAULT: "hsl(var(--success))", foreground: "hsl(var(--success-foreground))" },
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "var(--radius)",
+        sm: "var(--radius)",
       },
       keyframes: {
         "accordion-down": { from: { height: "0" }, to: { height: "var(--radix-accordion-content-height)" } },
