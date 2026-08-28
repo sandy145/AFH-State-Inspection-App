@@ -159,6 +159,14 @@ finalize on the case with unreviewed evidence.
 
 ## Things that will bite
 
+**A variable added with an empty value.** Every reader treats blank as unset and
+falls back to its default, and values are trimmed, so a stray newline from
+pasting does not corrupt a connection string. This was not always true: an empty
+`DIRECT_DATABASE_URL` once stopped a build outright, and an empty `DEMO_PASSWORD`
+seeded every demo account with an empty password, which the sign-in form will not
+accept — nobody could log in at all. Deleting a variable and blanking it now mean
+the same thing.
+
 **Environment variables seem to be ignored.** They are applied at build time.
 Adding them changes nothing until the next deployment, and a deployment created
 before you added them will never see them however many times you reload.

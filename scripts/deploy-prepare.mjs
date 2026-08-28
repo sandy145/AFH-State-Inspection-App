@@ -19,13 +19,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { deriveDirectUrl } from "./lib/derive-direct-url.mjs";
 
-const hasDatabase = Boolean(process.env.DATABASE_URL);
-const shouldSeed = process.env.RUN_SEED_ON_BUILD === "true";
+/** A blank variable is an unset one — see src/lib/env.ts for why this matters. */
+const read = (name) => {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+};
+
+const hasDatabase = Boolean(read("DATABASE_URL"));
+const shouldSeed = read("RUN_SEED_ON_BUILD") === "true";
 
 // Vercel, Netlify, Render and friends all set this kind of marker. On a hosting
 // platform a missing database is a misconfiguration, not a local convenience.
 const onHostingPlatform = Boolean(
-  process.env.VERCEL || process.env.NETLIFY || process.env.RENDER || process.env.CI === "1",
+  read("VERCEL") || read("NETLIFY") || read("RENDER") || read("CI") === "1",
 );
 
 function run(command, label) {
@@ -79,8 +85,8 @@ if (!hasDatabase) {
 // the first, derive it. Supabase's transaction pooler is port 6543 and its
 // session pooler is 5432 on the same host, and the pgbouncer flags exist only
 // to disable prepared statements for the pooled runtime connection.
-if (!process.env.DIRECT_DATABASE_URL) {
-  const derived = deriveDirectUrl(process.env.DATABASE_URL);
+if (!read("DIRECT_DATABASE_URL")) {
+  const derived = deriveDirectUrl(read("DATABASE_URL"));
 
   if (derived) {
     process.env.DIRECT_DATABASE_URL = derived;
@@ -91,7 +97,7 @@ if (!process.env.DIRECT_DATABASE_URL) {
   } else {
     // Not a recognised pooled URL, so there is nothing to transform. Using the
     // same URL is right for a direct connection and merely suboptimal otherwise.
-    process.env.DIRECT_DATABASE_URL = process.env.DATABASE_URL;
+    process.env.DIRECT_DATABASE_URL = read("DATABASE_URL");
     console.warn(
       "▸ DIRECT_DATABASE_URL is not set and DATABASE_URL does not look pooled — " +
         "using it unchanged for migrations.",

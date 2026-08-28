@@ -136,3 +136,62 @@ describe("database url", () => {
     expect(() => env.databaseUrl).toThrow(/DATABASE_URL/);
   });
 });
+
+describe("blank environment variables", () => {
+  // Both of these cost real time on a live deployment. A dashboard makes it easy
+  // to add a variable and leave the value empty, and `??` does not catch it.
+  it("treats an empty string as unset, not as a configured empty value", async () => {
+    const env = await loadEnv({
+      DEMO_PASSWORD: "",
+      APP_URL: "",
+      STORAGE_DRIVER: "",
+      VERCEL: undefined,
+      DATABASE_URL: "postgresql://localhost/x",
+    });
+
+    // An empty DEMO_PASSWORD once seeded every demo account with an empty
+    // password, which the sign-in form will not accept — nobody could log in.
+    expect(env.demoPassword).toBe("AfhPortal!Dev2026");
+    expect(env.appUrl).toBe("http://localhost:3000");
+    expect(env.storageDriver).toBe("local");
+  });
+
+  it("treats a whitespace-only value as unset too", async () => {
+    const env = await loadEnv({
+      DEMO_PASSWORD: "   ",
+      MAX_UPLOAD_BYTES: "  ",
+      DATABASE_URL: "postgresql://localhost/x",
+    });
+
+    expect(env.demoPassword).toBe("AfhPortal!Dev2026");
+    expect(env.maxUploadBytes).toBe(25 * 1024 * 1024);
+  });
+
+  it("trims a value that has stray whitespace around it", async () => {
+    // Pasting into a dashboard field picks up spaces and newlines easily, and a
+    // connection string with a trailing newline fails in a very confusing way.
+    const env = await loadEnv({
+      APP_URL: "  https://portal.example.gov  ",
+      DATABASE_URL: "  postgresql://localhost/x\n",
+    });
+
+    expect(env.appUrl).toBe("https://portal.example.gov");
+    expect(env.databaseUrl).toBe("postgresql://localhost/x");
+  });
+
+  it("does not let a blank boolean flag read as false-by-accident", async () => {
+    const env = await loadEnv({
+      APP_ENV: "test",
+      SHOW_DEMO_CREDENTIALS: "",
+      DATABASE_URL: "postgresql://localhost/x",
+    });
+
+    // Blank means unset, so the default for a test environment applies.
+    expect(env.showDemoCredentials).toBe(true);
+  });
+
+  it("rejects a blank required variable rather than accepting emptiness", async () => {
+    const env = await loadEnv({ DATABASE_URL: "   " });
+    expect(() => env.databaseUrl).toThrow(/DATABASE_URL/);
+  });
+});

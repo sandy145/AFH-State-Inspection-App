@@ -26,8 +26,20 @@ import { DEADLINE_RULES, HOLIDAYS_2026, REGULATIONS, SYSTEM_CONFIGURATION } from
 
 const prisma = new PrismaClient();
 
-const APP_ENV = process.env.APP_ENV ?? process.env.NODE_ENV ?? "development";
-const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "AfhPortal!Dev2026";
+/**
+ * A blank environment variable means "not configured", never "configured as
+ * nothing". Reading DEMO_PASSWORD with `??` once seeded every demo account with
+ * an empty password — which the sign-in form will not even accept, so nobody
+ * could log in at all.
+ */
+function read(name: string): string | undefined {
+  const value = process.env[name];
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+const APP_ENV = read("APP_ENV") ?? read("NODE_ENV") ?? "development";
+const DEMO_PASSWORD = read("DEMO_PASSWORD") ?? "AfhPortal!Dev2026";
 
 if (APP_ENV === "production") {
   throw new Error(

@@ -7,24 +7,44 @@ import "server-only";
  *  - Demo credentials cannot be seeded outside development or test.
  *  - A production build refuses to start on the default session secret.
  */
-function required(name: string): string {
+/**
+ * Reads an environment variable, treating a blank one as absent.
+ *
+ * A deployment dashboard makes it easy to add a variable and leave its value
+ * empty, and this has now cost real time twice: an empty DIRECT_DATABASE_URL
+ * stopped a build with "resolved to an empty string", and an empty DEMO_PASSWORD
+ * seeded every demo account with an empty password, locking them all out.
+ *
+ * `??` does not help, because an empty string is neither null nor undefined. A
+ * blank variable means "not configured" — never "configured as nothing" — so
+ * every reader below goes through here.
+ */
+function read(name: string): string | undefined {
   const value = process.env[name];
+  if (value === undefined) return undefined;
+
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+function required(name: string): string {
+  const value = read(name);
   if (!value) throw new Error(`Missing required environment variable ${name}`);
   return value;
 }
 
 function optional(name: string, fallback: string): string {
-  return process.env[name] ?? fallback;
+  return read(name) ?? fallback;
 }
 
 function bool(name: string, fallback: boolean): boolean {
-  const raw = process.env[name];
+  const raw = read(name);
   if (raw === undefined) return fallback;
   return raw === "true" || raw === "1";
 }
 
 function int(name: string, fallback: number): number {
-  const raw = process.env[name];
+  const raw = read(name);
   if (raw === undefined) return fallback;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -44,9 +64,9 @@ const isProduction = appEnv === "production";
  *
  * An explicit environment variable always wins.
  */
-const onVercel = Boolean(process.env.VERCEL);
+const onVercel = Boolean(read("VERCEL"));
 
-const platformUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+const platformUrl = read("VERCEL_PROJECT_PRODUCTION_URL") ?? read("VERCEL_URL");
 const defaultAppUrl = platformUrl ? `https://${platformUrl}` : "http://localhost:3000";
 const defaultStorageDriver = onVercel ? "database" : "local";
 
